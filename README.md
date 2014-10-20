@@ -166,3 +166,16 @@ If successful, a `dict` representing the following JSON is returned:
             ...
         ]
     }
+
+### `log_out()`
+
+Log out of the UBank API.
+
+If successful, a `dict` representing the following JSON is returned:
+
+    {
+        "status": {
+            "message": "Success",
+            "code": "API-200"
+        }
+    }

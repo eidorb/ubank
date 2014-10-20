@@ -90,3 +90,14 @@ class UBankAPI(object):
         json_response = self.session.get(url, params=params).json()
         if json_response['status']['code'] == 'API-200':
             return json_response
+
+    def log_out(self):
+        """Log out of the UBank API.
+
+        Return a dict with the log out response.
+        """
+        url = '{}init/auth'.format(BASE_API_URL)
+        params = {'v': '1'}
+        json_response = self.session.delete(url, params=params).json()
+        if json_response['status']['code'] == 'API-200':
+            return json_response
