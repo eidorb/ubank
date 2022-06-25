@@ -1,181 +1,396 @@
 # ubank-api
 
-A simple Python wrapper around UBank's HTTP API.
+Implements a [Requests](https://requests.readthedocs.io/) interface for interacting
+with UBank's API.
 
-## Requirements
 
-This module requires the [Requests](http://docs.python-requests.org/en/latest/)
-Python library.
+# Getting started
 
-## API methods
+## Authenticate
 
-The `UBankAPI` class methods wrap several UBank API methods. After
-authenticating, you can retrieve information about accounts, transactions,
-billers and payees. If successful, each method returns a `dict` representation
-of JSON data returned by the underlying API HTTP request.
+Authenticate with your username and password:
 
-### `authenticate(username, password)`
+```python
+from ubank import UBankSession
 
-Authenticate with the UBank API using `username` and `password`.
+ubank_session = UBankSession("user@domain.com", "password")
+```
 
-If successful, a `dict` representing the following JSON is returned:
 
-    {
-        "status": {
-            "message": "Welcome to the API",
-            "code": "API-1"
-        }
-    }
+## API endpoints
 
-### `accounts()`
+Here's a non-exhaustive list of API endpoints you may wish to try.
 
-Return a brief summary of account data for each account.
+- [Accounts](#accounts)
+- [Account details](#account-details)
+- [Transactions](#transactions)
+- [Cards](#cards)
+- [Payments](#payments)
+- [Payees](#payees)
 
-If successful, a `dict` representing the following JSON is returned:
 
-    {
-        "status": {
-            "message": "Success",
-            "code": "API-200"
+### Accounts
+
+```python
+ubank_session.get("/v1/ubank/accounts", params={"include": "homeloan"}).json()
+```
+
+```js
+{
+    "accounts": [
+        {
+            "accountNumber": "...",
+            "accountOpeningDate": "...",
+            "availableBalance": "...",
+            "bonusRate": "...",
+            "currentBalance": "...",
+            "entireAccountId": "...",
+            "id": "...",
+            "isEligibleForBonusRate": true,
+            "legacyToken": "...",
+            "nickname": "...",
+            "ownership": "...",
+            "productCode": "...",
+            "productName": "...",
+            "productType": "...",
+            "status": "...",
+            "visible": true
         },
-        "accountsResponse": [
-            {
-                "status": <status>,
-                "accountToken": <accountToken>,
-                "accountIdDisplay": <accountIdDisplay>,
-                "currentBalance": <currentBalance>,
-                "type": <type>,
-                "availableBalance": <availableBalance>,
-                "name": <name>,
-                "code": <code>,
-                "nickname": <nickname>
+        {
+            "accountNumber": "...",
+            "accountOpeningDate": "...",
+            "availableBalance": "...",
+            "bonusRate": "...",
+            "currentBalance": "...",
+            "entireAccountId": "...",
+            "id": "...",
+            "isEligibleForBonusRate": false,
+            "legacyToken": "...",
+            "linkedUsaverAccount": {
+                "accountNumber": "...",
+                "id": "...",
+                "legacyToken": "..."
             },
-            ...
-        ]
-    }
-
-### `account(account_token)`
-
-Return detailed account information for the given `account_token` (returned
-by `accounts()`).
-
-If successful, a `dict` representing the following JSON is returned:
-
-    {
-        "status": {
-            "message": "Success",
-            "code": "API-200"
-        },
-        "accountDetailsResponse": {
-            "productType": <productType>,
-            "accountToken": <accountToken>,
-            "currentAccount": {
-                "interestEarnedInLastTaxYear": <interestEarnedInLastTaxYear>,
-                "unclearBalance": <unclearBalance>,
-                "netRate": <netRate>,
-                "bonusRate": <bonusRate>,
-                "availableBalance": <availableBalance>,
-                "holdBalance": <holdBalance>,
-                "stdRate": <stdRate>,
-                "interestEarnedInCurrentTaxYear": <interestEarnedInCurrentTaxYear>
-            },
-            "apiStructType": <apiStructType>,
-            "productCode": <productCode>,
-            "productName": <productName>,
-            "accountIdDisplay": <accountIdDisplay>,
-            "currentBalance": <currentBalance>,
-            "nickname": <nickname>
+            "nickname": "...",
+            "ownership": "...",
+            "productCode": "...",
+            "productName": "...",
+            "productType": "...",
+            "status": "...",
+            "visible": true
         }
-    }
+    ]
+}
+```
 
-### `transactions(account_token)`
 
-Return up to 100 of the latest transactions for the given `account_token`
-(returned by `accounts()`).
+### Account details
 
-If successful, a `dict` representing the following JSON is returned:
+```python
+ubank_session.get("/banking/ubank/account/<legacyToken>", params={"v": "4"}).json()
+```
 
-    {
-        "status": {
-            "message": "Success",
-            "code": "API-200"
+```js
+{
+    "accountDetailsResponse": {
+        "accountIdDisplay": "...",
+        "accountToken": "...",
+        "apiStructType": "...",
+        "currentAccount": {
+            "availableBalance": "...",
+            "bonusRate": "...",
+            "holdBalance": "...",
+            "interestEarnedInCurrentMonth": "...",
+            "interestEarnedInCurrentTaxYear": "...",
+            "interestEarnedInLastTaxYear": "...",
+            "interestPaidInCurrentTaxYear": "...",
+            "interestPaidInLastTaxYear": "...",
+            "lastStatementGenerated": "...",
+            "netRate": "...",
+            "overdraftLimit": "...",
+            "statementsDeliveryType": "...",
+            "stdRate": "...",
+            "unclearBalance": "..."
         },
-        "transactionsResponse": {
-            "totalRecords": <totalRecords>,
-            "transactions": [
+        "currentBalance": "...",
+        "isKYCConfirmed": true,
+        "nickname": "...",
+        "openingDate": "...",
+        "productCode": "...",
+        "productName": "...",
+        "productType": "..."
+    },
+    "status": {
+        "code": "API-200",
+        "message": "Success"
+    }
+}
+```
+
+
+### Transactions
+
+```python
+ubank_session.get("/v1/ubank/accounts/<id>/transactions", params={"preferredPageSize": "20"}).json()
+```
+
+```js
+{
+    "accountNumber": "...",
+    "bsb": "...",
+    "next": "...",
+    "transactions": [
+        {
+            "amount": "...",
+            "currency": "...",
+            "date": "...",
+            "description": "...",
+            "id": "...",
+            "narrative": "...",
+            "processingStatus": "...",
+            "reference": "...",
+            "runningBalance": "...",
+            "timestamp": "...",
+            "transactionId": "...",
+            "transactionTypeCode": "..."
+        },
+        {
+            "amount": "...",
+            "categories": [
                 {
-                    "date": <date>,
-                    "narrative": <narrative>,
-                    "runningBalance": <runningBalance>,
-                    "amount": <amount>,
-                    "description": <description>
-                },
-                ...
+                    "axisId": 1,
+                    "axisLabel": "...",
+                    "ubankAssignedCategoryId": 16,
+                    "ubankAssignedCategoryLabel": "..."
+                }
             ],
-            "accountIdDisplay": <accountIdDisplay>
-        }
-    }
-
-### `billers()`
-
-Return BPAY biller information.
-
-If successful, a `dict` representing the following JSON is returned:
-
-    {
-        "status": {
-            "message": "Success",
-            "code": "API-200"
+            "channel": "...",
+            "currency": "...",
+            "date": "...",
+            "description": "...",
+            "externalAccountName": "...",
+            "fastPaymentReference": "",
+            "id": "...",
+            "narrative": "...",
+            "processingStatus": "...",
+            "reference": "...",
+            "runningBalance": "...",
+            "timestamp": "...",
+            "transactionId": "...",
+            "transactionTypeCode": "..."
         },
-        "billersResponse": [
-            {
-                "billerStatus": <billerStatus>,
-                "nickname": <nickname>,
-                "billerCode": <billerCode>,
-                "crn": <crn>
+        {
+            "amount": "...",
+            "channel": "...",
+            "currency": "...",
+            "date": "...",
+            "description": "...",
+            "externalAccountName": "...",
+            "fastPaymentReference": "",
+            "id": "...",
+            "narrative": "...",
+            "processingStatus": "...",
+            "reference": "...",
+            "runningBalance": "...",
+            "timestamp": "...",
+            "transactionId": "...",
+            "transactionTypeCode": "..."
+        },
+        {
+            "amount": "...",
+            "anzsicCategory": {
+                "classCode": "...",
+                "classTitle": "...",
+                "divisionCode": "...",
+                "divisionTitle": "...",
+                "groupCode": "...",
+                "groupTitle": "...",
+                "subdivisionCode": "...",
+                "subdivisionTitle": "..."
             },
-            ...
-        ]
-    }
-
-### `payees()`
-
-Return payee information.
-
-If successful, a `dict` representing the following JSON is returned:
-
-    {
-        "status": {
-            "message": "Success",
-            "code": "API-200"
-        },
-        "payeesResponse": [
-            {
-                "apiStructType": <apiStructType>,
-                "payeeType": <payeeType>,
-                "accountType": <accountType>,
-                "statementReference": <statementReference>,
-                "accountIdDisplay": <accountIdDisplay>,
-                "accountName": <accountName>,
-                "remitterName": <remitterName>,
-                "payeeToken": {
-                    "token": <token>
+            "categories": [
+                {
+                    "axisId": 1,
+                    "axisLabel": "...",
+                    "ubankAssignedCategoryId": 24,
+                    "ubankAssignedCategoryLabel": "..."
+                }
+            ],
+            "currency": "...",
+            "date": "...",
+            "description": "...",
+            "id": "...",
+            "merchantDetails": {
+                "businessName": "",
+                "phoneNumber": {
+                    "international": "",
+                    "local": ""
                 },
-                "nickname": <nickname>
+                "website": ""
+            },
+            "merchantLocation": {
+                "country": "",
+                "formattedAddress": "",
+                "geometry": {
+                    "lat": "",
+                    "lng": ""
+                },
+                "postalCode": "",
+                "route": "",
+                "routeNo": "",
+                "state": "",
+                "suburb": ""
+            },
+            "narrative": "...",
+            "processingStatus": "...",
+            "reference": "...",
+            "runningBalance": "...",
+            "timestamp": "...",
+            "transactionId": "...",
+            "transactionTypeCode": "..."
+        },
+        ...
+    ]
+}
+```
+
+
+### Cards
+
+```python
+ubank_session.get("/banking/ubank/cards/detailed)", params={"v": "6"}).json()
+```
+
+```js
+{
+    "cardsResponse": [
+        {
+            "cardId": "...",
+            "cardNumberDisplay": "...",
+            "cardSequenceNumber": "...",
+            "cardToken": "...",
+            "linkedAccounts": [
+                {
+                    "accountClass": "...",
+                    "accountIdDisplay": "...",
+                    "accountToken": "",
+                    "attachedAccountType": "...",
+                    "blockCode": "...",
+                    "capabilities": [
+                        "BURTEMPBLOCK",
+                        "BURTEMPUNBLOCK",
+                        "BURPERMBLOCK",
+                        "BURREORDER",
+                        "SETPIN",
+                        "RESETPIN",
+                        "PUSHSUBSCRIPTION",
+                        "NABPAY",
+                        "WALLET",
+                        "CARDSLEDGERADDRESS",
+                        "SMARTRECEIPTS"
+                    ],
+                    "cardholderRelationship": "...",
+                    "isCardUsed": true,
+                    "isOwned": true,
+                    "primaryAccountHolder": false,
+                    "scheme": "...",
+                    "slot": "..."
+                }
+            ],
+            "nameOnCard": "",
+            "plasticType": "...",
+            "productClass": "...",
+            "productCode": "...",
+            "productDescription": "...",
+            "productName": "...",
+            "productType": "..."
+        }
+    ],
+    "status": {
+        "code": "API-200",
+        "message": "Success"
+    }
+}
+```
+
+
+### Payments
+
+```python
+ubank_session.get("/banking/ubank/payments/_/_/_/_/_/_/_/_/_/_", params={"v": "7"}).json()
+```
+
+```js
+{
+    "paymentsResponse": {
+        "payments": [
+            {
+                "from": {
+                    "account": {
+                        "accountApca": {
+                            "accountName": "...",
+                            "accountNumber": "...",
+                            "bsb": "..."
+                        },
+                        "apiStructType": "..."
+                    }
+                },
+                "method": {
+                    "apiStructType": "...",
+                    "bill": {
+                        "amount": "..."
+                    }
+                },
+                "paymentId": "...",
+                "paymentToken": "...",
+                "recurrence": {
+                    "apiStructType": "...",
+                    "onceOff": {
+                        "paymentDate": "..."
+                    }
+                },
+                "status": "...",
+                "to": {
+                    "account": {
+                        "apiStructType": "...",
+                        "biller": {
+                            "code": "...",
+                            "crn": "...",
+                            "name": "..."
+                        }
+                    }
+                }
             },
             ...
-        ]
+        ],
+        "totalRecords": ...
+    },
+    "status": {
+        "code": "API-200",
+        "message": "Success"
     }
+}
+```
 
-### `log_out()`
 
-Log out of the UBank API.
+### Payees
 
-If successful, a `dict` representing the following JSON is returned:
+```python
+ubank_session.get("/v1/ubank/payees").json()
+```
 
+```js
+[
     {
-        "status": {
-            "message": "Success",
-            "code": "API-200"
-        }
-    }
+        "billerCode": "...",
+        "billerName": "...",
+        "crn": "",
+        "nickname": "...",
+        "payeeId": "...",
+        "payeeType": "...",
+        "standardBiller": false,
+        "version": "..."
+    },
+    ...
+]
+```
