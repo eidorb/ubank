@@ -1,0 +1,6 @@
+# Mamba environment file.
+name: ubank
+channels:
+  - conda-forge
+dependencies:
+  - python=3.8
