@@ -1,396 +1,83 @@
-# ubank-api
+# ubank
 
-Implements a [Requests](https://requests.readthedocs.io/) interface for interacting
-with UBank's API.
+Access [ubank](https://www.ubank.com.au) programatically.
+
+This does not provide true API-like interface, but you can retrieve information
+using browser automation.
 
 
-# Getting started
+## Requirements
 
-## Authenticate
+Python 3.8+ and [Playwright](https://playwright.dev/python/).
 
-Authenticate with your username and password:
+
+## Installation
+
+Install from PyPI:
+
+```console
+$ pip install ubank
+```
+
+Install version of Firefox required by Playwright:
+
+```console
+$ playwright install --with-deps firefox
+```
+
+
+## Getting started
+
+Create an instance of `UbankClient` and log in using a security code:
 
 ```python
-from ubank import UBankSession
-
-ubank_session = UBankSession("user@domain.com", "password")
+>>> from ubank import UbankClient
+>>> ubank_client = UbankClient()
+>>> ubank_client.log_in_with_security_code('name@domain.com', 'SecretPassw0rd')
+Enter security code: 123456
 ```
 
-
-## API endpoints
-
-Here's a non-exhaustive list of API endpoints you may wish to try.
-
-- [Accounts](#accounts)
-- [Account details](#account-details)
-- [Transactions](#transactions)
-- [Cards](#cards)
-- [Payments](#payments)
-- [Payees](#payees)
-
-
-### Accounts
+Then you can get account information:
 
 ```python
-ubank_session.get("/v1/ubank/accounts", params={"include": "homeloan"}).json()
+>>> ubank_client.get_accounts()
+{'linkedBanks': [{'bankId': 1, 'shortBankName': 'ubank', 'accounts': [{'label': 'Spend account', 'nickname': 'Spend account', 'type': 'TRANSACTION', 'balance': {'currency': 'AUD', 'current': 1000, 'available': 1000}, 'status': 'Active'}, {'label': 'Save account', 'nickname': 'Save account', 'type': 'SAVINGS', 'balance': {'currency': 'AUD', 'current': 10000, 'available': 10000}, 'status': 'Active'}]}]}
 ```
 
-```js
-{
-    "accounts": [
-        {
-            "accountNumber": "...",
-            "accountOpeningDate": "...",
-            "availableBalance": "...",
-            "bonusRate": "...",
-            "currentBalance": "...",
-            "entireAccountId": "...",
-            "id": "...",
-            "isEligibleForBonusRate": true,
-            "legacyToken": "...",
-            "nickname": "...",
-            "ownership": "...",
-            "productCode": "...",
-            "productName": "...",
-            "productType": "...",
-            "status": "...",
-            "visible": true
-        },
-        {
-            "accountNumber": "...",
-            "accountOpeningDate": "...",
-            "availableBalance": "...",
-            "bonusRate": "...",
-            "currentBalance": "...",
-            "entireAccountId": "...",
-            "id": "...",
-            "isEligibleForBonusRate": false,
-            "legacyToken": "...",
-            "linkedUsaverAccount": {
-                "accountNumber": "...",
-                "id": "...",
-                "legacyToken": "..."
-            },
-            "nickname": "...",
-            "ownership": "...",
-            "productCode": "...",
-            "productName": "...",
-            "productType": "...",
-            "status": "...",
-            "visible": true
-        }
-    ]
-}
-```
-
-
-### Account details
+After logging in with a security code, you can retrieve a trusted cookie:
 
 ```python
-ubank_session.get("/banking/ubank/account/<legacyToken>", params={"v": "4"}).json()
+>>> ubank_client.get_trusted_cookie()
+{'name': '026d9560-3c86-4680-b926-44bdd28eba94', 'value': 'YmxhaCBibGFoIGJsYWggYmxhaCBibGFoIGJsYWggYmxhaCBibGFo', 'domain': 'www.ubank.com.au', 'path': '/', 'expires': 1706758407, 'httpOnly': True, 'secure': True, 'sameSite': 'Strict'}
 ```
 
-```js
-{
-    "accountDetailsResponse": {
-        "accountIdDisplay": "...",
-        "accountToken": "...",
-        "apiStructType": "...",
-        "currentAccount": {
-            "availableBalance": "...",
-            "bonusRate": "...",
-            "holdBalance": "...",
-            "interestEarnedInCurrentMonth": "...",
-            "interestEarnedInCurrentTaxYear": "...",
-            "interestEarnedInLastTaxYear": "...",
-            "interestPaidInCurrentTaxYear": "...",
-            "interestPaidInLastTaxYear": "...",
-            "lastStatementGenerated": "...",
-            "netRate": "...",
-            "overdraftLimit": "...",
-            "statementsDeliveryType": "...",
-            "stdRate": "...",
-            "unclearBalance": "..."
-        },
-        "currentBalance": "...",
-        "isKYCConfirmed": true,
-        "nickname": "...",
-        "openingDate": "...",
-        "productCode": "...",
-        "productName": "...",
-        "productType": "..."
-    },
-    "status": {
-        "code": "API-200",
-        "message": "Success"
-    }
-}
-```
-
-
-### Transactions
+Use the cookie to log in without a security code:
 
 ```python
-ubank_session.get("/v1/ubank/accounts/<id>/transactions", params={"preferredPageSize": "20"}).json()
+>>> ubank_client.log_in_with_trusted_cookie(
+...     'name@domain.com',
+...     'SecretPassw0rd',
+...     {'name': '026d9560-3c86-4680-b926-44bdd28eba94', 'value': 'YmxhaCBibGFoIGJsYWggYmxhaCBibGFoIGJsYWggYmxhaCBibGFo', 'domain': 'www.ubank.com.au', 'path': '/', 'expires': 1706758407, 'httpOnly': True, 'secure': True, 'sameSite': 'Strict'}
+... )
 ```
 
-```js
-{
-    "accountNumber": "...",
-    "bsb": "...",
-    "next": "...",
-    "transactions": [
-        {
-            "amount": "...",
-            "currency": "...",
-            "date": "...",
-            "description": "...",
-            "id": "...",
-            "narrative": "...",
-            "processingStatus": "...",
-            "reference": "...",
-            "runningBalance": "...",
-            "timestamp": "...",
-            "transactionId": "...",
-            "transactionTypeCode": "..."
-        },
-        {
-            "amount": "...",
-            "categories": [
-                {
-                    "axisId": 1,
-                    "axisLabel": "...",
-                    "ubankAssignedCategoryId": 16,
-                    "ubankAssignedCategoryLabel": "..."
-                }
-            ],
-            "channel": "...",
-            "currency": "...",
-            "date": "...",
-            "description": "...",
-            "externalAccountName": "...",
-            "fastPaymentReference": "",
-            "id": "...",
-            "narrative": "...",
-            "processingStatus": "...",
-            "reference": "...",
-            "runningBalance": "...",
-            "timestamp": "...",
-            "transactionId": "...",
-            "transactionTypeCode": "..."
-        },
-        {
-            "amount": "...",
-            "channel": "...",
-            "currency": "...",
-            "date": "...",
-            "description": "...",
-            "externalAccountName": "...",
-            "fastPaymentReference": "",
-            "id": "...",
-            "narrative": "...",
-            "processingStatus": "...",
-            "reference": "...",
-            "runningBalance": "...",
-            "timestamp": "...",
-            "transactionId": "...",
-            "transactionTypeCode": "..."
-        },
-        {
-            "amount": "...",
-            "anzsicCategory": {
-                "classCode": "...",
-                "classTitle": "...",
-                "divisionCode": "...",
-                "divisionTitle": "...",
-                "groupCode": "...",
-                "groupTitle": "...",
-                "subdivisionCode": "...",
-                "subdivisionTitle": "..."
-            },
-            "categories": [
-                {
-                    "axisId": 1,
-                    "axisLabel": "...",
-                    "ubankAssignedCategoryId": 24,
-                    "ubankAssignedCategoryLabel": "..."
-                }
-            ],
-            "currency": "...",
-            "date": "...",
-            "description": "...",
-            "id": "...",
-            "merchantDetails": {
-                "businessName": "",
-                "phoneNumber": {
-                    "international": "",
-                    "local": ""
-                },
-                "website": ""
-            },
-            "merchantLocation": {
-                "country": "",
-                "formattedAddress": "",
-                "geometry": {
-                    "lat": "",
-                    "lng": ""
-                },
-                "postalCode": "",
-                "route": "",
-                "routeNo": "",
-                "state": "",
-                "suburb": ""
-            },
-            "narrative": "...",
-            "processingStatus": "...",
-            "reference": "...",
-            "runningBalance": "...",
-            "timestamp": "...",
-            "transactionId": "...",
-            "transactionTypeCode": "..."
-        },
-        ...
-    ]
-}
+You can also retrieve a trusted cookie by running the ubank module from the command
+line. Use an environment variable to avoid storing your banking password in shell
+history:
+
+```console
+$ read -s PASSWORD
+SecretPassw0rd
 ```
 
+Running ubank as a module will prompt for a security code and then display the trusted
+cookie object:
 
-### Cards
-
-```python
-ubank_session.get("/banking/ubank/cards/detailed)", params={"v": "6"}).json()
+```console
+$ python -m ubank name@domain.com "$PASSWORD"
+Enter security code: 123456
+{'name': '026d9560-3c86-4680-b926-44bdd28eba94', 'value': 'YmxhaCBibGFoIGJsYWggYmxhaCBibGFoIGJsYWggYmxhaCBibGFo', 'domain': 'www.ubank.com.au', 'path': '/', 'expires': 1706758407, 'httpOnly': True, 'secure': True, 'sameSite': 'Strict'}
 ```
 
-```js
-{
-    "cardsResponse": [
-        {
-            "cardId": "...",
-            "cardNumberDisplay": "...",
-            "cardSequenceNumber": "...",
-            "cardToken": "...",
-            "linkedAccounts": [
-                {
-                    "accountClass": "...",
-                    "accountIdDisplay": "...",
-                    "accountToken": "",
-                    "attachedAccountType": "...",
-                    "blockCode": "...",
-                    "capabilities": [
-                        "BURTEMPBLOCK",
-                        "BURTEMPUNBLOCK",
-                        "BURPERMBLOCK",
-                        "BURREORDER",
-                        "SETPIN",
-                        "RESETPIN",
-                        "PUSHSUBSCRIPTION",
-                        "NABPAY",
-                        "WALLET",
-                        "CARDSLEDGERADDRESS",
-                        "SMARTRECEIPTS"
-                    ],
-                    "cardholderRelationship": "...",
-                    "isCardUsed": true,
-                    "isOwned": true,
-                    "primaryAccountHolder": false,
-                    "scheme": "...",
-                    "slot": "..."
-                }
-            ],
-            "nameOnCard": "",
-            "plasticType": "...",
-            "productClass": "...",
-            "productCode": "...",
-            "productDescription": "...",
-            "productName": "...",
-            "productType": "..."
-        }
-    ],
-    "status": {
-        "code": "API-200",
-        "message": "Success"
-    }
-}
-```
-
-
-### Payments
-
-```python
-ubank_session.get("/banking/ubank/payments/_/_/_/_/_/_/_/_/_/_", params={"v": "7"}).json()
-```
-
-```js
-{
-    "paymentsResponse": {
-        "payments": [
-            {
-                "from": {
-                    "account": {
-                        "accountApca": {
-                            "accountName": "...",
-                            "accountNumber": "...",
-                            "bsb": "..."
-                        },
-                        "apiStructType": "..."
-                    }
-                },
-                "method": {
-                    "apiStructType": "...",
-                    "bill": {
-                        "amount": "..."
-                    }
-                },
-                "paymentId": "...",
-                "paymentToken": "...",
-                "recurrence": {
-                    "apiStructType": "...",
-                    "onceOff": {
-                        "paymentDate": "..."
-                    }
-                },
-                "status": "...",
-                "to": {
-                    "account": {
-                        "apiStructType": "...",
-                        "biller": {
-                            "code": "...",
-                            "crn": "...",
-                            "name": "..."
-                        }
-                    }
-                }
-            },
-            ...
-        ],
-        "totalRecords": ...
-    },
-    "status": {
-        "code": "API-200",
-        "message": "Success"
-    }
-}
-```
-
-
-### Payees
-
-```python
-ubank_session.get("/v1/ubank/payees").json()
-```
-
-```js
-[
-    {
-        "billerCode": "...",
-        "billerName": "...",
-        "crn": "",
-        "nickname": "...",
-        "payeeId": "...",
-        "payeeType": "...",
-        "standardBiller": false,
-        "version": "..."
-    },
-    ...
-]
-```
+Secure storage of your username, password and trusted cookie is **your**
+responsibility.
