@@ -61,6 +61,12 @@ Use the cookie to log in without a security code:
 ... )
 ```
 
+Stop Playwright gracefully when you're done:
+
+```python
+>>> ubank_client.stop()
+```
+
 You can also retrieve a trusted cookie by running the ubank module from the command
 line. Use an environment variable to avoid storing your banking password in shell
 history:
