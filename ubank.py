@@ -37,6 +37,7 @@ class UbankClient:
             input("Enter security code: ")
         )
         self.page.get_by_label("Enter security code").press("Enter")
+        self.page.wait_for_url("https://www.ubank.com.au/welcome/my/accounts")
 
     def log_in_with_trusted_cookie(
         self, username: str, password: str, cookie: Cookie
@@ -45,6 +46,7 @@ class UbankClient:
         # Add trusted browser cookie into browser context.
         self.context.add_cookies([cookie])  # type: ignore
         self._log_in(username, password)
+        self.page.wait_for_url("https://www.ubank.com.au/welcome/my/accounts")
 
     def get_trusted_cookie(self) -> Cookie:
         """Returns trusted cookie from authenticated session.
