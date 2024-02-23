@@ -87,3 +87,20 @@ Enter security code: 123456
 
 Secure storage of your username, password and trusted cookie is **your**
 responsibility.
+
+
+## Release
+
+Bump project version. e.g.,
+
+```console
+$ poetry version patch
+Bumping version from 0.1.1 to 0.1.2
+```
+
+Publish to PyPI:
+
+```console
+$ read -s PASSWORD
+$ poetry publish --build -u __token__ -p "$PASSWORD"
+```

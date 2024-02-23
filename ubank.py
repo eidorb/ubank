@@ -22,6 +22,12 @@ class UbankClient:
         self.browser.close()
         self.playwright.stop()
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.stop()
+
     def _log_in(self, username: str, password: str) -> None:
         """Performs username and password steps of log in flow."""
         self.page.goto("https://www.ubank.com.au/welcome/login/username")
@@ -97,7 +103,6 @@ if __name__ == "__main__":
     parser.add_argument("username")
     parser.add_argument("password")
     args = parser.parse_args()
-    ubank_client = UbankClient()
-    ubank_client.log_in_with_security_code(args.username, args.password)
-    print(ubank_client.get_trusted_cookie())
-    ubank_client.stop()
+    with UbankClient() as ubank_client:
+        ubank_client.log_in_with_security_code(args.username, args.password)
+        print(ubank_client.get_trusted_cookie())
