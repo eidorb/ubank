@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "ubank"
-version = "0.1.2"
-description = "Access ubank programatically."
+version = "1.0.0"
+description = "Access ubank's API."
 authors = ["eidorb"]
 license = "MIT"
 readme = "README.md"
