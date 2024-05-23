@@ -59,6 +59,7 @@ Instead, you'll use the enrolled device's credentials (stored in `device.json`).
 
 Instantiate a `ubank.Device` from `device.json`:
 ```python
+import json
 import ubank
 
 with open("device.json") as file:
