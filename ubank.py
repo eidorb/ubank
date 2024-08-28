@@ -187,6 +187,7 @@ def enrol_device(
             "x-hardware-id": hardware_id,
             "x-device-id": device_id,
             "x-device-meta": device_meta,
+            "x-api-version": "30",
         }
     ) as client:
         # Start enrolment by identifying ourselves.
