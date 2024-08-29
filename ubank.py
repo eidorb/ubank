@@ -13,6 +13,7 @@ import httpx
 base_headers = {
     "Origin": "ionic://bank86400",
     "x-private-api-key": "ANZf5WgzmVLmTUwAQyuCq7LspXF2pd4N",
+    "x-api-version": "30",
 }
 
 
@@ -187,7 +188,6 @@ def enrol_device(
             "x-hardware-id": hardware_id,
             "x-device-id": device_id,
             "x-device-meta": device_meta,
-            "x-api-version": "30",
         }
     ) as client:
         # Start enrolment by identifying ourselves.
