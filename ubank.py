@@ -12,6 +12,7 @@ import httpx
 # Unchanging headers in every request.
 base_headers = {
     "Origin": "ionic://bank86400",
+    "x-api-version": "29",
     "x-private-api-key": "ANZf5WgzmVLmTUwAQyuCq7LspXF2pd4N",
     "x-api-version": "30",
 }
