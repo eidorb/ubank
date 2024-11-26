@@ -187,6 +187,11 @@ $ poetry publish --build -u __token__ -p "$PASSWORD"
 
 ## Changelog
 
+### 1.1.0
+
+- Set `x-api-version` to fix #4 (thanks [@jakepronger](https://github.com/jakepronger)!)
+
+
 ### 1.0.0
 
 - Drop Playwright requirement.
