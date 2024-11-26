@@ -2,6 +2,16 @@
 
 Access [ubank](https://www.ubank.com.au)'s API.
 
+## Contents
+
+- [Contents](#contents)
+- [Getting started](#getting-started)
+- [Accessing ubank's API](#accessing-ubanks-api)
+- [API endpoints](#api-endpoints)
+- [Testing](#testing)
+- [Release](#release)
+- [Changelog](#changelog)
+
 
 ## Getting started
 
