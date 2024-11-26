@@ -111,6 +111,62 @@ with ubank.Client(device) as client:
     print(client.get("/app/v1/tfn").json())
 ```
 
+## Testing
+
+Pull credentials from AWS:
+
+```bash
+aws-vault exec brodie@oasis -- python
+Opening the SSO authorization page in your default browser (use Ctrl-C to abort)
+https://device.sso.ap-southeast-2.amazonaws.com/?user_code=YMMV-CUMT
+```
+
+```python
+>>> import json
+>>>
+>>> import boto3
+>>>
+>>> import ubank
+>>>
+>>>
+>>> def get_device(parameter_name="/portfolio/ubank-device"):
+...     """Returns ubank enrolled device from AWS Parameter Store."""
+...     return ubank.Device(
+...         **json.loads(
+...             # Retrieve JSON string from decrypted parameter value.
+...             boto3.client("ssm", region_name="us-east-1").get_parameter(
+...                 Name=parameter_name, WithDecryption=True
+...             )["Parameter"]["Value"]
+...         )
+...     )
+...
+>>>
+>>> def save_device(device, parameter_name="/portfolio/ubank-device"):
+...     """Saves ubank device credentials to AWS Parameter Store."""
+...     return boto3.client("ssm", region_name="us-east-1").put_parameter(
+...         Name=parameter_name,
+...         Value=device.dumps(),
+...         Type="SecureString",
+...         Overwrite=True,
+...     )
+...
+>>>
+>>> # Get ubank account balances and trusted cookie.
+>>> device = get_device()
+>>> with ubank.Client(device) as client:
+...     # Update stored device credentials.
+...     save_device(client.device)
+...     for account in client.get("/app/v1/accounts/summary").json()["linkedBanks"][0][
+...         "accounts"
+...     ]:
+...         print(account)
+...
+{'Version': 77, 'Tier': 'Standard', 'ResponseMetadata': {'RequestId': '1dd6cfff-dead-beef-asdf-123ead7e3ba0', 'HTTPStatusCode': 200, 'HTTPHeaders': {'server': 'Server', 'date': 'Thu, 1 Nov 1970 01:23:45 GMT', 'content-type': 'application/x-amz-json-1.1', 'content-length': '32', 'connection': 'keep-alive', 'x-amzn-requestid': '1dd6cfff-dead-beef-asdf-123ead7e3ba0'}, 'RetryAttempts': 0}}
+{'label': 'Spend account', 'type': 'TRANSACTION', 'balance': {'currency': 'AUD', 'current': 1000.00, 'available': 1000.00}, 'status': 'Active', 'id': '9a293f00-c000-45b2-b21e-28cf09453f73', 'nickname': 'USpend', 'number': '00000000', 'bsb': '000000', 'lastBalanceRefresh': '1970-01-01T01:23:45.678Z', 'openDate': '1970-01-01T01:23:45.678Z', 'isJointAccount': False, 'depositProductData': {'interestTiers': [{'interestRate': 0, 'minimumRange': 0}]}}
+{'label': 'Save account', 'type': 'SAVINGS', 'balance': {'currency': 'AUD', 'current': 1000000.00, 'available': 1000000.00}, 'status': 'Active', 'id': '88bcd861-21ad-48d9-8c3d-d789c5845252', 'nickname': 'USave', 'number': '00000000', 'bsb': '000000', 'lastBalanceRefresh': '1970-01-01T01:23:45.678Z', 'openDate': '1970-01-01T01:23:45.678Z', 'isJointAccount': False, 'depositProductData': {'interestTiers': [{'interestRate': 5.5, 'minimumRange': 0, 'maximumRange': 100000}, {'interestRate': 5, 'minimumRange': 100000.01, 'maximumRange': 250000}, {'interestRate': 0, 'minimumRange': 250000.01}], 'interestPaymentFrequency': {'interestPaymentCountPerPeriod': 1, 'interestPeriod': '1 Month', 'interestPaymentSchedule': 'End'}}}
+>>>
+```
+
 
 ## Release
 
