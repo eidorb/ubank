@@ -1,14 +1,14 @@
 import argparse
-import base64
 import json
 import logging
-import secrets
+import pickle
 import uuid
 from base64 import b64encode
-from dataclasses import asdict, dataclass
 from getpass import getpass
 
 import httpx
+import soft_webauthn
+from cryptography.hazmat.primitives import serialization
 
 # Unchanging headers in every request.
 base_headers = {
@@ -17,26 +17,184 @@ base_headers = {
     "x-private-api-key": "ANZf5WgzmVLmTUwAQyuCq7LspXF2pd4N",
 }
 
+# Used in passkey creation and various requests.
+origin = "https://www.ubank.com.au"
 
-@dataclass
-class Device:
-    """Represents an enrolled ubank device."""
 
-    hardware_id: str
-    device_id: str
-    device_meta: str
-    hashed_pin: str
-    secret: str
-    auth_key: str
-    email: str
-    mobile_number: str
-    user_id: str
-    username: str
-    token: str
+class Passkey(soft_webauthn.SoftWebauthnDevice):
+    """Extends SoftWebauthnDevice with ubank-specific attributes and serialization
+    methods."""
 
-    def dumps(self) -> str:
-        """Returns JSON string representation of self."""
-        return json.dumps(asdict(self), indent=2)
+    def __init__(
+        self, passkey_name: str, app_version="11.103.3", device_name="iPhone17-3"
+    ):
+        """Initialise your passkey with a name.
+
+        :param passkey_name: Set passkey name (shown in ubank app)
+        :param app_version: Set ubank application version identifier. See versions here:
+            https://apps.apple.com/au/app/id1449543099.
+        :param device_name: Set device identifier. See "Hardware strings" row in this
+            table: https://en.wikipedia.org/wiki/List_of_iPhone_models. Replace comma
+            with hyphen.
+        """
+        super().__init__()
+        self.passkey_name = passkey_name
+        # Generate a fresh hardware ID.
+        self.hardware_id = str(uuid.uuid4())
+        # Start with an empty device ID. ubank will assign one later.
+        self.device_id = ""
+        # Build device meta string from app version and device name.
+        self.device_meta = json.dumps(
+            {
+                "appVersion": app_version,
+                "binaryVersion": app_version,
+                "deviceName": device_name,
+                "environment": "production",
+                "instance": "live",
+                "native": True,
+                "platform": "ios",
+            }
+        )
+        # Start with empty username, it will be assigned by ubank later.
+        self.username = ""
+
+    # TODO: Remove if custom flag support merged https://github.com/bodik/soft-webauthn/pull/15
+    def create(self, options, origin):
+        """IDENTICAL to super().create(), except User Verification flag set."""
+        if {"alg": -7, "type": "public-key"} not in options["publicKey"][
+            "pubKeyCredParams"
+        ]:
+            raise ValueError(
+                "Requested pubKeyCredParams does not contain supported type"
+            )
+
+        if ("attestation" in options["publicKey"]) and (
+            options["publicKey"]["attestation"] not in [None, "none"]
+        ):
+            raise ValueError("Only none attestation supported")
+
+        # prepare new key
+        self.cred_init(
+            options["publicKey"]["rp"]["id"], options["publicKey"]["user"]["id"]
+        )
+
+        # generate credential response
+        client_data = {
+            "type": "webauthn.create",
+            "challenge": soft_webauthn.urlsafe_b64encode(
+                options["publicKey"]["challenge"]
+            )
+            .decode("ascii")
+            .rstrip("="),
+            "origin": origin,
+        }
+
+        rp_id_hash = soft_webauthn.sha256(self.rp_id.encode("ascii"))
+        # Set Bit 2, User Verification (UV) also.
+        # https://developer.mozilla.org/en-US/docs/Web/API/Web_Authentication_API/Authenticator_data
+        flags = b"\x45"  # attested_data + user_present + user_verified
+        sign_count = soft_webauthn.pack(">I", self.sign_count)
+        credential_id_length = soft_webauthn.pack(">H", len(self.credential_id))
+        cose_key = soft_webauthn.cbor.encode(
+            soft_webauthn.ES256.from_cryptography_key(self.private_key.public_key())
+        )
+        attestation_object = {
+            "authData": rp_id_hash
+            + flags
+            + sign_count
+            + self.aaguid
+            + credential_id_length
+            + self.credential_id
+            + cose_key,
+            "fmt": "none",
+            "attStmt": {},
+        }
+
+        return {
+            "id": soft_webauthn.urlsafe_b64encode(self.credential_id),
+            "rawId": self.credential_id,
+            "response": {
+                "clientDataJSON": json.dumps(client_data).encode("utf-8"),
+                "attestationObject": soft_webauthn.cbor.encode(attestation_object),
+            },
+            "type": "public-key",
+        }
+
+    # TODO: Remove if custom flag support merged https://github.com/bodik/soft-webauthn/pull/15
+    def get(self, options, origin):
+        """IDENTICAL to super().create(), except User Verification flag set."""
+
+        if self.rp_id != options["publicKey"]["rpId"]:
+            raise ValueError("Requested rpID does not match current credential")
+
+        self.sign_count += 1
+
+        # prepare signature
+        client_data = json.dumps(
+            {
+                "type": "webauthn.get",
+                "challenge": soft_webauthn.urlsafe_b64encode(
+                    options["publicKey"]["challenge"]
+                )
+                .decode("ascii")
+                .rstrip("="),
+                "origin": origin,
+            }
+        ).encode("utf-8")
+        client_data_hash = soft_webauthn.sha256(client_data)
+
+        rp_id_hash = soft_webauthn.sha256(self.rp_id.encode("ascii"))
+        # Set Bit 2, User Verification (UV) also.
+        # https://developer.mozilla.org/en-US/docs/Web/API/Web_Authentication_API/Authenticator_data
+        flags = b"\x05"
+        sign_count = soft_webauthn.pack(">I", self.sign_count)
+        authenticator_data = rp_id_hash + flags + sign_count
+
+        signature = self.private_key.sign(
+            authenticator_data + client_data_hash,
+            soft_webauthn.ec.ECDSA(soft_webauthn.hashes.SHA256()),
+        )
+
+        # generate assertion
+        return {
+            "id": soft_webauthn.urlsafe_b64encode(self.credential_id),
+            "rawId": self.credential_id,
+            "response": {
+                "authenticatorData": authenticator_data,
+                "clientDataJSON": client_data,
+                "signature": signature,
+                "userHandle": self.user_handle,
+            },
+            "type": "public-key",
+        }
+
+    # TODO: Replace if serialization PR merged https://github.com/bodik/soft-webauthn/pull/11
+    def dump(self, file):
+        """Writes pickled passkey to `file`."""
+        serialized_passkey = Passkey(self.passkey_name)
+        for name, value in vars(self).items():
+            setattr(serialized_passkey, name, value)
+        serialized_passkey.private_key = self.private_key.private_bytes(
+            serialization.Encoding.PEM,
+            serialization.PrivateFormat.PKCS8,
+            serialization.NoEncryption(),
+        )
+        pickle.dump(serialized_passkey, file)
+
+    # TODO: Replace if serialization PR merged https://github.com/bodik/soft-webauthn/pull/11
+    @classmethod
+    def load(cls, file):
+        """Returns passkey unpickled from `file`."""
+        serialized_passkey = pickle.load(file)
+        passkey = Passkey(serialized_passkey.passkey_name)
+        for name, value in vars(serialized_passkey).items():
+            setattr(passkey, name, value)
+        passkey.private_key = serialization.load_pem_private_key(
+            serialized_passkey.private_key,
+            password=None,
+            backend=soft_webauthn.default_backend(),
+        )
+        return passkey
 
 
 class Client(httpx.Client):

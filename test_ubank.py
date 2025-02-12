@@ -1,6 +1,9 @@
 from base64 import urlsafe_b64encode
 
+from cryptography.hazmat.primitives import serialization
+
 from ubank import (
+    Passkey,
     int8array_to_bytes,
     parse_public_key_credential_creation_options,
     parse_public_key_credential_request_options,
@@ -102,3 +105,71 @@ def test_serialize_assertion():
         },
         "type": "public-key",
     }
+
+
+def test_passkey_serialization(tmp_path):
+    """Tests passkey pickle/unpickle."""
+    passkey = Passkey(passkey_name="test")
+
+    # Throw away attestation.
+    passkey.create(
+        {
+            "publicKey": {
+                "rp": {"name": "example org", "id": "example.org"},
+                "user": {
+                    "id": b"randomhandle",
+                    "name": "username",
+                    "displayName": "user name",
+                },
+                "challenge": b"arandomchallenge",
+                "pubKeyCredParams": [{"alg": -7, "type": "public-key"}],
+                "attestation": "none",
+            }
+        },
+        "https://example.org",
+    )
+    assert passkey.sign_count == 0
+
+    # Throw away assertion.
+    passkey.get(
+        {
+            "publicKey": {
+                "challenge": b"arandomchallenge",
+                "rpId": "example.org",
+            }
+        },
+        "https://example.org",
+    )
+    assert passkey.sign_count == 1
+
+    # Set some ubank style attributes.
+    passkey.device_id = "abc"
+    passkey.username = "123"
+
+    # Dump and unpickle passkey.
+    with (tmp_path / "pickle").open("wb") as f:
+        passkey.dump(f)
+    with (tmp_path / "pickle").open("rb") as f:
+        unpickled_passkey = Passkey.load(f)
+
+    assert unpickled_passkey.passkey_name == passkey.passkey_name
+    assert unpickled_passkey.hardware_id == passkey.hardware_id
+    assert unpickled_passkey.device_meta == passkey.device_meta
+    assert unpickled_passkey.device_id == passkey.device_id
+    assert unpickled_passkey.username == passkey.username
+
+    assert unpickled_passkey.credential_id == passkey.credential_id
+    assert unpickled_passkey.private_key != passkey.private_key
+    assert unpickled_passkey.private_key.private_bytes(
+        serialization.Encoding.PEM,
+        serialization.PrivateFormat.PKCS8,
+        serialization.NoEncryption(),
+    ) == passkey.private_key.private_bytes(
+        serialization.Encoding.PEM,
+        serialization.PrivateFormat.PKCS8,
+        serialization.NoEncryption(),
+    )
+    assert unpickled_passkey.aaguid == passkey.aaguid
+    assert unpickled_passkey.rp_id == passkey.rp_id
+    assert unpickled_passkey.user_handle == passkey.user_handle
+    assert unpickled_passkey.sign_count == passkey.sign_count
