@@ -4,6 +4,7 @@ import json
 import logging
 import secrets
 import uuid
+from base64 import b64encode
 from dataclasses import asdict, dataclass
 from getpass import getpass
 
@@ -146,6 +147,82 @@ class Client(httpx.Client):
         """Kills ubank session before exiting the context."""
         self._delete_session()
         super().__exit__(exc_type, exc_value, traceback)
+
+
+def int8array_to_bytes(array: list[int]) -> bytes:
+    """Converts Javascript Int8Array to unsigned bytes."""
+    return b"".join(int8.to_bytes(signed=True) for int8 in array)
+
+
+def parse_public_key_credential_creation_options(string: str) -> dict:
+    """Returns SoftWebauthnDevice create options dict parsed from ubank's
+    publicKeyCredentialCreationOptions."""
+    # Deserialize string.
+    options = {"publicKey": json.loads(string)}
+    # Convert Int8Arrays to bytes.
+    options["publicKey"]["user"]["id"] = int8array_to_bytes(
+        options["publicKey"]["user"]["id"]
+    )
+    options["publicKey"]["challenge"] = int8array_to_bytes(
+        options["publicKey"]["challenge"]
+    )
+    for credential in options["publicKey"]["excludeCredentials"]:
+        credential["id"] = int8array_to_bytes(credential["id"])
+    # Fix alg values; should be int not string.
+    # https://developer.mozilla.org/en-US/docs/Web/API/PublicKeyCredentialCreationOptions#alg
+    for param in options["publicKey"]["pubKeyCredParams"]:
+        param["alg"] = int(param["alg"])
+
+    return options
+
+
+def parse_public_key_credential_request_options(string: str) -> dict:
+    """Returns SoftWebauthnDevice get options dict parsed from ubank's
+    publicKeyCredentialRequestOptions."""
+    # Deserialize string.
+    options = {"publicKey": json.loads(string)}
+    # Convert Int8Arrays to bytes.
+    options["publicKey"]["challenge"] = int8array_to_bytes(
+        options["publicKey"]["challenge"]
+    )
+    for credential in options["publicKey"]["allowCredentials"]:
+        credential["id"] = int8array_to_bytes(credential["id"])
+
+    return options
+
+
+def prepare_attestation(attestation: dict) -> dict:
+    """Creates JSON-serializable attestation from SoftWebauthnDevice attestation object."""
+    return {
+        # id is base64 bytes, decode to base64 string.
+        "id": attestation["id"].decode("ascii"),
+        # rawId is bytes, convert to base64 encoded string.
+        "rawId": b64encode(attestation["rawId"]).decode("ascii"),
+        # clientDataJSON and attestationObject are bytes, convert to base64 encoded
+        # strings.
+        "response": {
+            key: b64encode(value).decode("ascii")
+            for key, value in attestation["response"].items()
+        },
+        "type": attestation["type"],
+    }
+
+
+def prepare_assertion(assertion: dict) -> dict:
+    """Creates JSON-serializable assertion from SoftWebauthnDevice assertion object."""
+    return {
+        # id is base64 bytes, decode to base64 string.
+        "id": assertion["id"].decode("ascii"),
+        # rawId is bytes, convert to base64 encoded string.
+        "rawId": b64encode(assertion["rawId"]).decode("ascii"),
+        # clientDataJSON, attestationObject, signature and userHandle are bytes,
+        # convert to base64 encoded strings.
+        "response": {
+            key: b64encode(value).decode("ascii")
+            for key, value in assertion["response"].items()
+        },
+        "type": assertion["type"],
+    }
 
 
 def enrol_device(
