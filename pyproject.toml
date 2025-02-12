@@ -8,4 +8,5 @@ license = "MIT"
 requires-python = ">=3.8"
 dependencies = [
     "httpx>=0.28.1",
+    "soft-webauthn>=0.1.4",
 ]
