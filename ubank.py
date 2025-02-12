@@ -12,9 +12,8 @@ import httpx
 # Unchanging headers in every request.
 base_headers = {
     "Origin": "ionic://bank86400",
-    "x-api-version": "29",
+    "x-api-version": "32",
     "x-private-api-key": "ANZf5WgzmVLmTUwAQyuCq7LspXF2pd4N",
-    "x-api-version": "30",
 }
 
 
@@ -150,7 +149,7 @@ class Client(httpx.Client):
 
 
 def enrol_device(
-    username: str, password: str, app_version="11.21.1", device_name="iPhone16-1"
+    username: str, password: str, app_version="11.103.3", device_name="iPhone17-3"
 ) -> Device:
     """Enrols new device with ubank.
 
@@ -227,7 +226,7 @@ def enrol_device(
                 "hashedPin": hashed_pin,
                 # Prompt interactively for security code.
                 "otpValue": input(
-                    f'Enter security code sent to {response.json()["maskedMobileNumber"]}: '
+                    f"Enter security code sent to {response.json()['maskedMobileNumber']}: "
                 ),
             },
             # Set access and auth token headers from previous response.
