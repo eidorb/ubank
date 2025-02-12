@@ -197,6 +197,11 @@ $ poetry publish --build -u __token__ -p "$PASSWORD"
 
 ## Changelog
 
+### 2.0.0
+
+- Migrate from Poetry to uv.
+
+
 ### 1.1.0
 
 - Set `x-api-version` to fix #4 (thanks [@jakepronger](https://github.com/jakepronger)!)
