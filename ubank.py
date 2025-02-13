@@ -200,55 +200,80 @@ class Passkey(soft_webauthn.SoftWebauthnDevice):
 class Client(httpx.Client):
     """ubank API client based on httpx.Client.
 
-    Initialise `Client` with a `Device` (see [`enrol_device()`](enrol_device)).
+    This class is initialised with a `Passkey` obtained from `add_passkey()`.
+
     It's recommended to use this class as a context manager. This ensures ubank
     sessions and HTTP connections are properly cleaned when leaving the `with` block:
+
     ```python
-    with ubank.Client(device) as client:
+    with Client(passkey) as client:
         ...
     ```
 
-    Important! You **must** store the instance's `.device` attribute after
-    instantiation. Otherwise the stored device credentials will be expired and you'll
-    need to re-enrol.
-
-    Instantiating `ubank.Client` refreshes the `auth_key` and long life `token`,
-    held in the `.device` attribute.
-
     `base_url` is set to https://api.ubank.com.au/, so only the API path is required
     when making requests:
+
     ```python
     client.get("/app/v1/accounts/summary")
     ```
     """
 
-    def __init__(self, device: Device) -> None:
-        """Initialises ubank session using device credentials.
+    def __init__(self, passkey: Passkey) -> None:
+        """Initialises ubank session using passkey to authenticate.
 
-        Initialisation sets `self.device` containing an updated auth key and token.
-        Be sure to save the updated device!
+        The passkey's `sign_count` attribute is incremented each time it is used.
+        Be sure to store the updated passkey after use.
 
-        :param device: A `Device` enrolled with ubank
+        :param passkey: `Passkey` registered with ubank
         """
         with httpx.Client(
             headers={
                 **base_headers,
-                "x-hardware-id": device.hardware_id,
-                "x-device-id": device.device_id,
-                "x-device-meta": device.device_meta,
+                "x-hardware-id": passkey.hardware_id,
+                "x-device-id": passkey.device_id,
+                "x-device-meta": passkey.device_meta,
             },
         ) as client:
-            # Authenticate with long life token.
-            response = client.post(
-                "https://api.ubank.com.au/app/v1/long-life-token/login",
-                json={
-                    "authKey": device.auth_key,
-                    "deviceUuid": device.device_id,
-                    "secret": device.secret,
-                    "token": device.token,
-                    "username": device.username,
+            # Initiate authentication flow to receive challenge from relying party
+            # (ubank).
+            response = client.get(
+                "https://api.ubank.com.au/app/v1/session/authorize",
+                params={
+                    "username": passkey.username,
                 },
             )
+            # Parse credential request options from response.
+            options = parse_public_key_credential_request_options(
+                response.json()["publicKeyCredentialRequestOptions"]
+            )
+            # Make assertion object suitable for ubank by making values JSON-serializable.
+            assertion = prepare_assertion(passkey.get(options, origin))
+
+            # Complete authentication flow by sending signed assertion to relying
+            # party.
+            response = client.post(
+                "https://api.ubank.com.au/app/v1/challenge/fido2-assertion",
+                # Query parameters come from previous response.
+                params={
+                    "nonce": response.json()["nonce"],
+                    "state": response.json()["state"],
+                    "session": response.json()["session"],
+                },
+                json={
+                    "assertion": json.dumps(assertion),
+                    # flowID comes from previous response.
+                    "flowId": response.json()["flowId"],
+                    "origin": origin,
+                },
+                # Set access and auth token headers from previous response.
+                headers={
+                    "x-access-token": response.json()["accessToken"],
+                    "x-auth-token": response.json()["accessToken"],
+                },
+            )
+            # Passkey authentication successful if response has 2xx status code.
+            # Raise an exception otherwise.
+            response.raise_for_status()
             # Set access and auth token headers for future requests.
             self.access_token = client.headers["x-access-token"] = client.headers[
                 "x-auth-token"
@@ -256,26 +281,6 @@ class Client(httpx.Client):
             # Store other tokens in order to kill session in future.
             self.refresh_token = response.json()["refreshToken"]
             self.session_token = response.json()["sessionToken"]
-            # Update device's auth key.
-            device.auth_key = response.json()["authKey"]
-
-            # Associate session with new auth key.
-            client.patch(
-                url="https://api.ubank.com.au/app/v1/sessions",
-                # Auth key UUID comes from previous response.
-                json={"authKeyUuid": response.json()["authKeyUuid"]},
-            )
-
-            # Refresh long life token.
-            response = client.post(
-                "https://api.ubank.com.au/app/v1/long-life-token/refresh",
-                json={"token": device.token},
-            )
-            # Update device token.
-            device.token = response.json()["token"]
-
-        # Maintain reference to updated device on this instance.
-        self.device = device
 
         # Initialise new httpx.Client, keeping headers and cookies from client.
         super().__init__(

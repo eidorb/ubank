@@ -199,6 +199,7 @@ $ poetry publish --build -u __token__ -p "$PASSWORD"
 
 ### 2.0.0
 
+- Implement passkey registration and authentication.
 - Migrate from Poetry to uv.
 
 
