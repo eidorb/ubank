@@ -513,7 +513,7 @@ def add_passkey(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Enrols new device with ubank. "
+        description="Registers new passkey with ubank. "
         "You will be asked for your ubank password and secret code interactively.",
     )
     parser.add_argument("username", help="ubank username")
@@ -521,9 +521,15 @@ if __name__ == "__main__":
         "-o",
         "--output",
         default="-",
-        type=argparse.FileType(mode="w"),
-        help="write JSON device credentials to file (default: write to stdout)",
+        type=argparse.FileType(mode="wb"),
+        help="writes plaintext passkey to file (default: write to stdout)",
         dest="file",
+    )
+    parser.add_argument(
+        "-n",
+        "--passkey-name",
+        default="ubank.py",
+        help="sets passkey name (default: ubank.py)",
     )
     parser.add_argument(
         "-v", "--verbose", action="store_true", help="displays httpx INFO logs"
@@ -532,6 +538,9 @@ if __name__ == "__main__":
     if args.verbose:
         # Displays basic httpx request information.
         logging.basicConfig(level=logging.INFO)
-    args.file.write(
-        enrol_device(args.username, password=getpass("Enter ubank password: ")).dumps()
-    )
+    # Write passkey to file.
+    add_passkey(
+        args.username,
+        password=getpass("Enter ubank password: "),
+        passkey_name=args.passkey_name,
+    ).dump(args.file)
