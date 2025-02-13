@@ -383,46 +383,32 @@ def prepare_assertion(assertion: dict) -> dict:
     }
 
 
-def enrol_device(
-    username: str, password: str, app_version="11.103.3", device_name="iPhone17-3"
-) -> Device:
-    """Enrols new device with ubank.
+def add_passkey(
+    username: str,
+    password: str,
+    passkey_name: str,
+) -> Passkey:
+    """Registers new passkey with ubank after prompting for security code sent to
+    mobile.
 
-    You are responsible for securely storing the enrolled device's information returned
-    by this function.
+    This function returns sensitive key material. You are responsible for securing
+    it!
 
     :param username: ubank username
     :param password: ubank password
-    :param app_version: Set ubank application version identifier. See versions here:
-        https://apps.apple.com/au/app/id1449543099.
-    :param device_name: Set device identifier. See "Hardware strings" row in this
-        table: https://en.wikipedia.org/wiki/List_of_iPhone_models. Replace comma
-        with hyphen.
-    :return: Enrolled device credentials
+    :param passkey_name: Set passkey name (shown in ubank app)
+    :return: New passkey
     """
-    # Generate a fresh hardware ID.
-    hardware_id = str(uuid.uuid4())
-    # Start with an empty device ID. ubank will assign one later.
-    device_id = ""
-    # Build device meta string from app version and device name.
-    device_meta = json.dumps(
-        {
-            "appVersion": app_version,
-            "binaryVersion": app_version,
-            "deviceName": device_name,
-            "environment": "production",
-            "instance": "live",
-            "native": True,
-            "platform": "ios",
-        }
-    )
+    # Initialise a software-based passkey. We also store various ubank IDs and metadata
+    # in this object's attributes.
+    passkey = Passkey(passkey_name)
 
     with httpx.Client(
         headers={
             **base_headers,
-            "x-hardware-id": hardware_id,
-            "x-device-id": device_id,
-            "x-device-meta": device_meta,
+            "x-hardware-id": passkey.hardware_id,
+            "x-device-id": passkey.device_id,
+            "x-device-meta": passkey.device_meta,
         }
     ) as client:
         # Start enrolment by identifying ourselves.
@@ -434,18 +420,13 @@ def enrol_device(
         # Next, authenticate with password.
         response = client.post(
             url="https://api.ubank.com.au/app/v1/challenge/password",
-            json={"deviceName": device_name, "password": password},
+            json={"deviceName": passkey_name, "password": password},
             # Set access and auth token headers from previous response.
             headers={
                 "x-access-token": response.json()["accessToken"],
                 "x-auth-token": response.json()["accessToken"],
             },
         )
-        # Set device ID assigned by ubank.
-        device_id = client.headers["x-device-id"] = response.json()["deviceId"]
-
-        # Generate a "hashed PIN", a random Base64 string.
-        hashed_pin = base64.standard_b64encode(secrets.token_bytes(66)).decode("utf-8")
 
         # Authenticate with second factor: a security code sent to mobile.
         otp_response = client.post(
@@ -457,8 +438,8 @@ def enrol_device(
                 "session": response.json()["session"],
             },
             json={
-                "deviceId": device_id,
-                "hashedPin": hashed_pin,
+                # flowID comes from previous response.
+                "flowId": response.json()["flowId"],
                 # Prompt interactively for security code.
                 "otpValue": input(
                     f"Enter security code sent to {response.json()['maskedMobileNumber']}: "
@@ -470,19 +451,43 @@ def enrol_device(
                 "x-auth-token": response.json()["accessToken"],
             },
         )
+        # Store username UUID assigned by ubank contained in this response.
+        passkey.username = otp_response.json()["username"]
         # Set access and auth token headers for future requests.
         client.headers["x-access-token"] = client.headers["x-auth-token"] = (
             otp_response.json()["accessToken"]
         )
 
-        # Generate a secret.
-        secret = str(uuid.uuid4())
-
-        # Obtain a long life token. This is used to authenticate in the future.
+        # Initiate registration of new credential (passkey) with relying party (ubank).
         response = client.post(
-            url="https://api.ubank.com.au/app/v1/long-life-token/generate",
-            json={"hashedPin": hashed_pin, "secret": secret},
+            url="https://api.ubank.com.au/app/v1/v2/device",
+            json={"deviceName": passkey_name, "type": "FIDO2"},
         )
+        # This response contains a device ID assigned by ubank. It's not set in
+        # headers just quite yet though.
+        passkey.device_id = response.json()["deviceId"]
+        # Parse credential creation options from response.
+        options = parse_public_key_credential_creation_options(
+            response.json()["publicKeyCredentialCreationOptions"]
+        )
+        # Make attestation object suitable for ubank by making values JSON-serializable.
+        attestation = prepare_attestation(passkey.create(options, origin))
+
+        # Send public key credential attestation to relying party (ubank).
+        response = client.post(
+            url=f"https://api.ubank.com.au/app/v1/v2/device/{passkey.device_id}/activate",
+            json={
+                "attestation": json.dumps(attestation),
+                "origin": origin,
+                "type": "FIDO2",
+            },
+        )
+        # Passkey registration successful if response has 2xx status code. Raise
+        # an exception otherwise.
+        response.raise_for_status()
+
+        # Set device ID header for future requests.
+        client.headers["x-device-id"] = passkey.device_id
 
         # Clear this session's tokens.
         client.request(
@@ -498,20 +503,7 @@ def enrol_device(
             },
         )
 
-        # The enrolled device's information is required for future authentication.
-        return Device(
-            hardware_id=hardware_id,
-            device_id=device_id,
-            device_meta=device_meta,
-            hashed_pin=hashed_pin,
-            secret=secret,
-            auth_key=otp_response.json()["authKey"],
-            email=otp_response.json()["email"],
-            mobile_number=otp_response.json()["mobileNumber"],
-            user_id=otp_response.json()["userId"],
-            username=otp_response.json()["username"],
-            token=response.json()["token"],
-        )
+        return passkey
 
 
 if __name__ == "__main__":
