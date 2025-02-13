@@ -1,13 +1,14 @@
 # ubank
 
-Access [ubank](https://www.ubank.com.au)'s API.
+Access [ubank](https://www.ubank.com.au)'s API with Python.
+
 
 ## Contents
 
 - [Contents](#contents)
 - [Getting started](#getting-started)
-- [Accessing ubank's API](#accessing-ubanks-api)
-- [API endpoints](#api-endpoints)
+- [ubank API](#ubank-api)
+- [CLI help](#cli-help)
 - [Testing](#testing)
 - [Release](#release)
 - [Changelog](#changelog)
@@ -15,97 +16,73 @@ Access [ubank](https://www.ubank.com.au)'s API.
 
 ## Getting started
 
-Install ubank with pip (Python 3.8+ is required):
+Install the `ubank` package (Python 3.8+ required):
+
 ```console
 $ pip install ubank
 ```
 
-Before accessing the API, you'll first need to enrol a new device with ubank.
-Running ubank as a module helps with this task:
+Register a new passkey with ubank:
+
 ```console
-$ python -m ubank --help
-usage: ubank.py [-h] [-o FILE] [-v] username
-
-Enrols new device with ubank. You will be asked for your ubank password and secret code interactively.
-
-positional arguments:
-  username              ubank username
-
-optional arguments:
-  -h, --help            show this help message and exit
-  -o FILE, --output FILE
-                        write JSON device credentials to file (default: write to stdout)
-  -v, --verbose         displays httpx INFO logs
-```
-
-We'll enrol a new device and save the credentials to `device.json`.
-Keep this file safe!
-You'll be prompted for your ubank password and security code during this step.
-```console
-$  python -m ubank name@domain.com --output device.json
+$ python -m ubank name@domain.com --output passkey.pickle
 Enter ubank password:
 Enter security code sent to 04xxxxx789: 123456
-$ cat device.json
-{
-  "hardware_id": "35bd47b0-eced-4fb4-88e1-24657c2500ec",
-  "device_id": "cc1d3291-8e7d-45fc-845b-326b65bffcb1",
-  "device_meta": "{\"appVersion\": \"15.11.1\", \"binaryVersion\": \"15.11.1\", \"deviceName\": \"iPhone19-1\", \"environment\": \"production\", \"instance\": \"live\", \"native\": true, \"platform\": \"ios\"}",
-  "hashed_pin": "N0ZsiU81f+qiOZvs424E06AasHBlHsSlH9Fj1J0Sz5c=",
-  "secret": "c3e59465-2449-4692-8d0a-6dc9bb8b2ae2",
-  "auth_key": "pLzKjKs0FW104tqaj5qD3wYmZf0Q+udRCsRgST1gRGwh9iaxVf5qZdn+LtidvqSx20Y=",
-  "email": "name@domain.com",
-  "mobile_number": "+61423456789",
-  "user_id": "51457aec-9fb4-45c4-9ed0-4d17b70665ec",
-  "username": "48b16c6f-19a5-46e7-855e-5d6922882276",
-  "token": "dw2FYNdTRLgIS8YxZlQ0RnihkpgxRB/+a/o3vmQWWiRtrF11H4ZjA8ywZfaoUYK/Gkc="
-}
 ```
 
+The above writes a new passkey to `passkey.pickle`.
+You'll be prompted for your ubank username and SMS security code.
 
-## Accessing ubank's API
+> [!CAUTION]
+> Your passkey grants access to your bank account.
+> It is **your** responsibility to keep it safe!
 
-You won't use your username and password to access ubank's API.
-Instead, you'll use the enrolled device's credentials (stored in `device.json`).
+Use your passkey to access ubank's API in a Python script:
 
-Instantiate a `ubank.Device` from `device.json`:
 ```python
-import json
-import ubank
+from ubank import Client, Passkey
 
-with open("device.json") as file:
-    device = ubank.Device(**json.load(file))
+# Load passkey from file.
+with open("passkey.pickle", "rb") as f:
+    passkey = Passkey.load(f)
+
+# Authenticate to ubank with passkey and print account balances.
+with Client(passkey) as client:
+    print("Account balances")
+    for account in client.get("/app/v1/accounts").json()["linkedBanks"][0]["accounts"]:
+        print(
+            f"{account['label']} ({account['type']}): {account['balance']['available']} {account['balance']['currency']}"
+        )
+
+# Save updated passkey to file.
+with open("passkey.pickle", "wb") as f:
+    passkey.dump(f)
 ```
 
-Next, we'll instantiate `ubank.Client` with the `device` created above.
-Use this class as a context manager.
-This ensures ubank sessions and HTTP connections are properly cleaned when leaving
-the `with` block.
+Resulting in the following output:
 
-`ubank.Client`'s `base_url` is set to `https://api.ubank.com.au/`, so only the API path is required when making requests.
+```
+Account balances
+Spend account (TRANSACTION): 765.48 AUD
+Savings account (SAVINGS): 1577.17 AUD
+```
 
 > [!IMPORTANT]
-> You **must** store the instance's `.device` attribute after instantiation.
-> Otherwise the stored device credentials will be expired and you'll need to re-enrol.
->
-> Instantiating `ubank.Client` refreshes the `auth_key` and long life `token`, held in the `.device` attribute.
+> Passkeys increment an internal counter with each authentication attempt.
+> You must save the updated passkey object which contains the modified counter value.
+> Your authentication attempts **will fail** if you do not do this.
+
+
+## ubank API
+
+`ubank.Client` is an [`httpx.Client`](https://www.python-httpx.org/advanced/clients/)
+with a familiar requests-style interface.
+Its `base_url` is set to `https://api.ubank.com.au/`, so only the path is required when making API requests.
+
+Here are some API endpoints to try (can you find more?):
 
 ```python
-with ubank.Client(device) as client:
-    with open("device.json", "w") as file:
-        file.write(client.device.dumps())
-    print(client.get("/app/v1/accounts/summary").json())
-
-{'linkedBanks': [{'bankId': 1, 'shortBankName': 'ubank', 'accounts': [{'label': 'Spend', 'type': 'TRANSACTION', 'balance': {'currency': 'AUD', 'current': 100, 'available': 100}, 'status': 'Active', 'id': '695db516-b0e2-4807-baca-77314a6257ce', 'nickname': 'Spend', 'number': '12345678', 'bsb': '670864', 'lastBalanceRefresh': '2024-01-02T00:00:00.000Z', 'openDate': '2024-01-01T00:00:00.000Z', 'isJointAccount': False}, {'label': 'Save', 'type': 'SAVINGS', 'balance': {'currency': 'AUD', 'current': 1200.44, 'available': 1200.44}, 'status': 'Active', 'id': '5bad6edf-247e-4221-9bfc-e7608f5984cb', 'nickname': 'Save', 'number': '23456789', 'bsb': '670864', 'lastBalanceRefresh': '2024-01-02T00:00:00.000Z', 'openDate': '2024-01-01T00:00:00.000Z', 'isJointAccount': False}]}]}
-```
-
-
-## API endpoints
-
-Here are some API endpoints to try:
-```python
-with ubank.Client(device) as client:
-    with open("device.json", "w") as file:
-        file.write(client.device.dumps())
+with Client(passkey) as client:
     print(client.get("/app/v1/accounts").json())
     print(client.get("/app/v1/accounts/summary").json())
     print(client.get("/app/v1/achievements").json())
@@ -120,6 +97,31 @@ with ubank.Client(device) as client:
     print(client.get("/app/v1/savings-goals").json())
     print(client.get("/app/v1/tfn").json())
 ```
+
+`ubank.Client` is intended to be used as a context manager.
+This ensures ubank sessions and HTTP connections are ended properly when leaving the `with` block.
+
+
+## CLI help
+
+```console
+$ python -m ubank --help
+usage: ubank.py [-h] [-o FILE] [-n PASSKEY_NAME] [-v] username
+
+Registers new passkey with ubank. You will be asked for your ubank password and secret code interactively.
+
+positional arguments:
+  username              ubank username
+
+options:
+  -h, --help            show this help message and exit
+  -o FILE, --output FILE
+                        writes plaintext passkey to file (default: write to stdout)
+  -n PASSKEY_NAME, --passkey-name PASSKEY_NAME
+                        sets passkey name (default: ubank.py)
+  -v, --verbose         displays httpx INFO logs
+```
+
 
 ## Testing
 
