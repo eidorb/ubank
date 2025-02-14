@@ -3,6 +3,7 @@ from base64 import urlsafe_b64encode
 from cryptography.hazmat.primitives import serialization
 
 from ubank import (
+    Client,
     Passkey,
     int8array_to_bytes,
     parse_public_key_credential_creation_options,
@@ -173,3 +174,19 @@ def test_passkey_serialization(tmp_path):
     assert unpickled_passkey.rp_id == passkey.rp_id
     assert unpickled_passkey.user_handle == passkey.user_handle
     assert unpickled_passkey.sign_count == passkey.sign_count
+
+
+def test_ubank_client():
+    """Tests Client using passkey loaded from file."""
+    # Load passkey from file.
+    with open("passkey.pickle", "rb") as f:
+        passkey = Passkey.load(f)
+    # Authenticate to ubank with passkey and print account balances.
+    with Client(passkey) as client:
+        # Save updated passkey to file.
+        with open("passkey.pickle", "wb") as f:
+            passkey.dump(f)
+        assert (
+            client.get("/app/v1/accounts").json()["linkedBanks"][0]["shortBankName"]
+            == "ubank"
+        )
