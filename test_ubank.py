@@ -5,12 +5,17 @@ from cryptography.hazmat.primitives import serialization
 from ubank import (
     Client,
     Passkey,
+    __version__,
     int8array_to_bytes,
     parse_public_key_credential_creation_options,
     parse_public_key_credential_request_options,
     prepare_assertion,
     prepare_attestation,
 )
+
+
+def test_version():
+    assert __version__ == "2.0.0a1"
 
 
 def test_int8array_to_bytes():

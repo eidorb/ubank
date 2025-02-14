@@ -138,11 +138,18 @@ A GitHub Actions [workflow](.github/workflows/workflow.yml) runs tests across a 
 
 ## Release
 
-Bump project version. e.g.,
+Bump project version with [hatch](https://hatch.pypa.io/latest/version/):
 
 ```console
-$ poetry version patch
-Bumping version from 0.1.1 to 0.1.2
+$ uvx hatch version minor
+Old: 2.0.0
+New: 2.1.0
+```
+
+Update uv lockfile:
+
+```console
+$ uv lock
 ```
 
 Publish to PyPI:
