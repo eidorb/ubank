@@ -271,9 +271,11 @@ class Client(httpx.Client):
                     "x-auth-token": response.json()["accessToken"],
                 },
             )
-            # Passkey authentication successful if response has 2xx status code.
-            # Raise an exception otherwise.
-            response.raise_for_status()
+            # Raise exception if passkey authentication was unsuccessful.
+            try:
+                response.raise_for_status()
+            except httpx.HTTPStatusError as e:
+                raise ValueError(f"{response.status_code=} {response.text=}") from e
             # Set access and auth token headers for future requests.
             self.access_token = client.headers["x-access-token"] = client.headers[
                 "x-auth-token"
@@ -468,6 +470,11 @@ def add_passkey(
             url="https://api.ubank.com.au/app/v1/v2/device",
             json={"deviceName": passkey_name, "type": "FIDO2"},
         )
+        # Raise exception if passkey registration could not be initiated.
+        try:
+            response.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            raise ValueError(f"{response.status_code=} {response.text=}") from e
         # This response contains a device ID assigned by ubank. It's not set in
         # headers just quite yet though.
         passkey.device_id = response.json()["deviceId"]
@@ -487,10 +494,11 @@ def add_passkey(
                 "type": "FIDO2",
             },
         )
-        # Passkey registration successful if response has 2xx status code. Raise
-        # an exception otherwise.
-        response.raise_for_status()
-
+        # Raise exception if passkey registration was unsuccessful.
+        try:
+            response.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            raise ValueError(f"{response.status_code=} {response.text=}") from e
         # Set device ID header for future requests.
         client.headers["x-device-id"] = passkey.device_id
 
