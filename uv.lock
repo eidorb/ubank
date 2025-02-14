@@ -245,8 +245,8 @@ wheels = [
 
 [[package]]
 name = "ubank"
-version = "2.0.0"
-source = { virtual = "." }
+version = "2.0.0a1"
+source = { editable = "." }
 dependencies = [
     { name = "httpx" },
     { name = "soft-webauthn" },

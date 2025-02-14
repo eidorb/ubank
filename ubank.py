@@ -11,6 +11,8 @@ import httpx
 import soft_webauthn
 from cryptography.hazmat.primitives import serialization
 
+__version__ = "2.0.0a1"
+
 # Unchanging headers in every request.
 base_headers = {
     "Origin": "ionic://bank86400",

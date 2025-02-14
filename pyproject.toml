@@ -1,11 +1,11 @@
 [project]
 name = "ubank"
-version = "2.0.0"
+dynamic = ["version"]
 description = "Access ubank.com.au with Python"
 readme = "README.md"
-authors = ["eidorb"]
-license = "MIT"
 requires-python = ">=3.11"
+license = "MIT"
+authors = [{name = "eidorb"}]
 dependencies = [
     "httpx>=0.28.1",
     "soft-webauthn>=0.1.4",
@@ -15,3 +15,10 @@ dependencies = [
 dev = [
     "pytest>=8.3.4",
 ]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "ubank.py"
