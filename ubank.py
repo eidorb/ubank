@@ -5,6 +5,7 @@ import pickle
 import uuid
 from base64 import b64encode
 from getpass import getpass
+from typing import IO
 
 import httpx
 import soft_webauthn
@@ -169,7 +170,7 @@ class Passkey(soft_webauthn.SoftWebauthnDevice):
         }
 
     # TODO: Replace if serialization PR merged https://github.com/bodik/soft-webauthn/pull/11
-    def dump(self, file):
+    def dump(self, file: IO[bytes]):
         """Writes pickled passkey to `file`."""
         serialized_passkey = Passkey(self.passkey_name)
         for name, value in vars(self).items():
@@ -183,7 +184,7 @@ class Passkey(soft_webauthn.SoftWebauthnDevice):
 
     # TODO: Replace if serialization PR merged https://github.com/bodik/soft-webauthn/pull/11
     @classmethod
-    def load(cls, file):
+    def load(cls, file: IO[bytes]):
         """Returns passkey unpickled from `file`."""
         serialized_passkey = pickle.load(file)
         passkey = Passkey(serialized_passkey.passkey_name)
@@ -194,6 +195,8 @@ class Passkey(soft_webauthn.SoftWebauthnDevice):
             password=None,
             backend=soft_webauthn.default_backend(),
         )
+        # Maintain reference to pickled passkey file.
+        passkey.filename = file.name
         return passkey
 
 
@@ -276,6 +279,9 @@ class Client(httpx.Client):
                 response.raise_for_status()
             except httpx.HTTPStatusError as e:
                 raise ValueError(f"{response.status_code=} {response.text=}") from e
+            # Serialize passkey to file after successful authentication.
+            with open(passkey.filename, "wb") as f:
+                passkey.dump(f)
             # Set access and auth token headers for future requests.
             self.access_token = client.headers["x-access-token"] = client.headers[
                 "x-auth-token"

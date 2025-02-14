@@ -111,6 +111,8 @@ def test_serialize_assertion():
 def test_passkey_serialization(tmp_path):
     """Tests passkey pickle/unpickle."""
     passkey = Passkey(passkey_name="test")
+    # Passkey created with constructor should not have filename attribute.
+    assert not hasattr(passkey, "filename")
 
     # Throw away attestation.
     passkey.create(
@@ -153,6 +155,9 @@ def test_passkey_serialization(tmp_path):
     with (tmp_path / "pickle").open("rb") as f:
         unpickled_passkey = Passkey.load(f)
 
+    # Passkey created with Passkey.load() should have filename attribute.
+    assert hasattr(unpickled_passkey, "filename")
+
     assert unpickled_passkey.passkey_name == passkey.passkey_name
     assert unpickled_passkey.hardware_id == passkey.hardware_id
     assert unpickled_passkey.device_meta == passkey.device_meta
@@ -181,12 +186,14 @@ def test_ubank_client():
     # Load passkey from file.
     with open("passkey.pickle", "rb") as f:
         passkey = Passkey.load(f)
-    # Authenticate to ubank with passkey and print account balances.
+
+    # Authenticate to ubank with passkey.
     with Client(passkey) as client:
-        # Save updated passkey to file.
-        with open("passkey.pickle", "wb") as f:
-            passkey.dump(f)
         assert (
             client.get("/app/v1/accounts").json()["linkedBanks"][0]["shortBankName"]
             == "ubank"
         )
+
+    # Updated passkey should be pickled automatically with updated sign_count.
+    with open("passkey.pickle", "rb") as f:
+        assert Passkey.load(f).sign_count == passkey.sign_count

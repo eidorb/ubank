@@ -53,10 +53,6 @@ with Client(passkey) as client:
         print(
             f"{account['label']} ({account['type']}): {account['balance']['available']} {account['balance']['currency']}"
         )
-
-# Save updated passkey to file.
-with open("passkey.pickle", "wb") as f:
-    passkey.dump(f)
 ```
 
 Resulting in the following output:
@@ -67,10 +63,8 @@ Spend account (TRANSACTION): 765.48 AUD
 Savings account (SAVINGS): 1577.17 AUD
 ```
 
-> [!IMPORTANT]
-> Passkeys increment an internal counter with each authentication attempt.
-> You must save the updated passkey object which contains the modified counter value.
-> Your authentication attempts **will fail** if you do not do this.
+Passkeys increment an internal counter with each authentication attempt.
+`ubank.Client` automatically writes the updated passkey object to the passkey file after successful authentication.
 
 
 ## ubank API
