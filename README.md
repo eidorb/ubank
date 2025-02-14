@@ -25,12 +25,12 @@ $ pip install ubank
 Register a new passkey with ubank:
 
 ```console
-$ python -m ubank name@domain.com --output passkey.pickle
+$ python -m ubank name@domain.com --output passkey.cbor
 Enter ubank password:
 Enter security code sent to 04xxxxx789: 123456
 ```
 
-The above writes a new passkey to `passkey.pickle`.
+The above writes a new passkey to `passkey.cbor`.
 You'll be prompted for your ubank username and SMS security code.
 
 > [!CAUTION]
@@ -43,7 +43,7 @@ Use your passkey to access ubank's API in a Python script:
 from ubank import Client, Passkey
 
 # Load passkey from file.
-with open("passkey.pickle", "rb") as f:
+with open("passkey.cbor", "rb") as f:
     passkey = Passkey.load(f)
 
 # Authenticate to ubank with passkey and print account balances.
@@ -125,7 +125,7 @@ Run tests locally:
 $ uv run pytest -v
 ```
 
-`test_ubank_client` requires a valid `passkey.pickle` file for testing ubank
+`test_ubank_client` requires a valid `passkey.cbor` file for testing ubank
 authentication.
 Skip this test using the following expression:
 
@@ -144,12 +144,6 @@ Bump project version with [hatch](https://hatch.pypa.io/latest/version/):
 $ uvx hatch version minor
 Old: 2.0.0
 New: 2.1.0
-```
-
-Update uv lockfile:
-
-```console
-$ uv lock
 ```
 
 Update `test_version` test.

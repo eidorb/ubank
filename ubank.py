@@ -1,7 +1,6 @@
 import argparse
 import json
 import logging
-import pickle
 import uuid
 from base64 import b64encode
 from getpass import getpass
@@ -11,7 +10,7 @@ import httpx
 import soft_webauthn
 from cryptography.hazmat.primitives import serialization
 
-__version__ = "2.0.0rc0"
+__version__ = "2.0.0rc1"
 
 # Unchanging headers in every request.
 base_headers = {
@@ -173,31 +172,29 @@ class Passkey(soft_webauthn.SoftWebauthnDevice):
 
     # TODO: Replace if serialization PR merged https://github.com/bodik/soft-webauthn/pull/11
     def dump(self, file: IO[bytes]):
-        """Writes pickled passkey to `file`."""
-        serialized_passkey = Passkey(self.passkey_name)
-        for name, value in vars(self).items():
-            setattr(serialized_passkey, name, value)
-        serialized_passkey.private_key = self.private_key.private_bytes(
+        """Serializes passkey to `file`."""
+        passkey_dict = {name: value for name, value in vars(self).items()}
+        passkey_dict["private_key"] = self.private_key.private_bytes(
             serialization.Encoding.PEM,
             serialization.PrivateFormat.PKCS8,
             serialization.NoEncryption(),
         )
-        pickle.dump(serialized_passkey, file)
+        file.write(soft_webauthn.cbor.dump_dict(passkey_dict))
 
     # TODO: Replace if serialization PR merged https://github.com/bodik/soft-webauthn/pull/11
     @classmethod
     def load(cls, file: IO[bytes]):
-        """Returns passkey unpickled from `file`."""
-        serialized_passkey = pickle.load(file)
-        passkey = Passkey(serialized_passkey.passkey_name)
-        for name, value in vars(serialized_passkey).items():
+        """Deserializes passkey from `file`."""
+        passkey_dict = soft_webauthn.cbor.decode(file.read())
+        passkey = Passkey(passkey_dict["passkey_name"])
+        for name, value in passkey_dict.items():
             setattr(passkey, name, value)
         passkey.private_key = serialization.load_pem_private_key(
-            serialized_passkey.private_key,
+            passkey.private_key,
             password=None,
             backend=soft_webauthn.default_backend(),
         )
-        # Maintain reference to pickled passkey file.
+        # Maintain reference to serialized passkey filename.
         passkey.filename = file.name
         return passkey
 

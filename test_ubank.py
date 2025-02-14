@@ -15,7 +15,7 @@ from ubank import (
 
 
 def test_version():
-    assert __version__ == "2.0.0rc0"
+    assert __version__ == "2.0.0rc1"
 
 
 def test_int8array_to_bytes():
@@ -114,7 +114,7 @@ def test_serialize_assertion():
 
 
 def test_passkey_serialization(tmp_path):
-    """Tests passkey pickle/unpickle."""
+    """Tests passkey de/serialization."""
     passkey = Passkey(passkey_name="test")
     # Passkey created with constructor should not have filename attribute.
     assert not hasattr(passkey, "filename")
@@ -154,24 +154,24 @@ def test_passkey_serialization(tmp_path):
     passkey.device_id = "abc"
     passkey.username = "123"
 
-    # Dump and unpickle passkey.
-    with (tmp_path / "pickle").open("wb") as f:
+    # Serialize and deserialize passkey.
+    with (tmp_path / "passkey.cbor").open("wb") as f:
         passkey.dump(f)
-    with (tmp_path / "pickle").open("rb") as f:
-        unpickled_passkey = Passkey.load(f)
+    with (tmp_path / "passkey.cbor").open("rb") as f:
+        deserialized_passkey = Passkey.load(f)
 
     # Passkey created with Passkey.load() should have filename attribute.
-    assert hasattr(unpickled_passkey, "filename")
+    assert hasattr(deserialized_passkey, "filename")
 
-    assert unpickled_passkey.passkey_name == passkey.passkey_name
-    assert unpickled_passkey.hardware_id == passkey.hardware_id
-    assert unpickled_passkey.device_meta == passkey.device_meta
-    assert unpickled_passkey.device_id == passkey.device_id
-    assert unpickled_passkey.username == passkey.username
+    assert deserialized_passkey.passkey_name == passkey.passkey_name
+    assert deserialized_passkey.hardware_id == passkey.hardware_id
+    assert deserialized_passkey.device_meta == passkey.device_meta
+    assert deserialized_passkey.device_id == passkey.device_id
+    assert deserialized_passkey.username == passkey.username
 
-    assert unpickled_passkey.credential_id == passkey.credential_id
-    assert unpickled_passkey.private_key != passkey.private_key
-    assert unpickled_passkey.private_key.private_bytes(
+    assert deserialized_passkey.credential_id == passkey.credential_id
+    assert deserialized_passkey.private_key != passkey.private_key
+    assert deserialized_passkey.private_key.private_bytes(
         serialization.Encoding.PEM,
         serialization.PrivateFormat.PKCS8,
         serialization.NoEncryption(),
@@ -180,16 +180,16 @@ def test_passkey_serialization(tmp_path):
         serialization.PrivateFormat.PKCS8,
         serialization.NoEncryption(),
     )
-    assert unpickled_passkey.aaguid == passkey.aaguid
-    assert unpickled_passkey.rp_id == passkey.rp_id
-    assert unpickled_passkey.user_handle == passkey.user_handle
-    assert unpickled_passkey.sign_count == passkey.sign_count
+    assert deserialized_passkey.aaguid == passkey.aaguid
+    assert deserialized_passkey.rp_id == passkey.rp_id
+    assert deserialized_passkey.user_handle == passkey.user_handle
+    assert deserialized_passkey.sign_count == passkey.sign_count
 
 
 def test_ubank_client():
     """Tests Client using passkey loaded from file."""
     # Load passkey from file.
-    with open("passkey.pickle", "rb") as f:
+    with open("passkey.cbor", "rb") as f:
         passkey = Passkey.load(f)
 
     # Authenticate to ubank with passkey.
@@ -199,6 +199,6 @@ def test_ubank_client():
             == "ubank"
         )
 
-    # Updated passkey should be pickled automatically with updated sign_count.
-    with open("passkey.pickle", "rb") as f:
+    # Updated passkey should be serialized automatically with updated sign_count.
+    with open("passkey.cbor", "rb") as f:
         assert Passkey.load(f).sign_count == passkey.sign_count
