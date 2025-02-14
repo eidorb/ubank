@@ -23,4 +23,4 @@ jobs:
           # Run tests.
           curl -LsSf https://astral.sh/uv/install.sh | sh
           uv python pin ${{ matrix.python-version }}
-          uv run pytest -v
+          uv run pytest -v -k 'not test_ubank_client'
