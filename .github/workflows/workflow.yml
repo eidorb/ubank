@@ -19,7 +19,7 @@ jobs:
         uses: actions/cache@v4
         # Keep uv cache and Python virtual environment.
         with:
-          key: ${{ hashFiles('pyproject.toml', 'uv.lock') }}
+          key: ${{ hashFiles('pyproject.toml', 'uv.lock') }}-${{ matrix.python-version }}
           path: |
             ~/.local/share/uv
             .venv
