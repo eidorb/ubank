@@ -1,0 +1,26 @@
+on:
+  push:
+    branches:
+      - master
+      - use-passkeys # TODO: remove
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - id: cache
+        uses: actions/cache@v4
+        # Keep uv cache and Python virtual environment.
+        with:
+          key: ${{ hashFiles('pyproject.toml', 'uv.lock') }}
+          path: |
+            ~/.local/share/uv
+            .venv
+      - run: |
+          # Run tests.
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          uv python pin ${{ matrix.python-version }}
+          uv run pytest -v
