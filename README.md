@@ -152,6 +152,8 @@ Update uv lockfile:
 $ uv lock
 ```
 
+Update `test_version` test.
+
 Create version tag and push to GitHub:
 
 ```console
