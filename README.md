@@ -141,9 +141,9 @@ A GitHub Actions [workflow](.github/workflows/workflow.yml) runs tests across a 
 Bump project version with [hatch](https://hatch.pypa.io/latest/version/):
 
 ```console
-$ uvx hatch version minor
-Old: 2.0.0
-New: 2.1.0
+$ uvx hatch version release
+Old: 2.0.0rc2
+New: 2.0.0
 ```
 
 Update `test_version` test.
@@ -155,18 +155,24 @@ $ git tag "v$(uvx hatch version)"
 $ git push origin "v$(uvx hatch version)"
 Total 0 (delta 0), reused 0 (delta 0), pack-reused 0
 To github.com:eidorb/ubank.git
- * [new tag]         v2.0.0 -> v2.1.0
+ * [new tag]         v2.0.0 -> v2.0.0
 ```
 
-Find the tag [here](https://github.com/eidorb/ubank/tags) and create a new release.
-Publishing a release triggers this [workflow](.github/workflows/workflow.yml), which builds and publishes the package to [PyPI](https://pypi.org/project/ubank/).
+Open new release form for tag:
+
+```shell
+open "https://github.com/eidorb/ubank/releases/new?tag=v$(uvx hatch version)"
+```
+
+Publishing a release triggers this [workflow](.github/workflows/workflow.yml)
+which builds and publishes the package to [PyPI](https://pypi.org/project/ubank/).
 
 
 ## Changelog
 
 ### 2.0.0
 
-- Implement passkey registration and authentication.
+- Implement passkey registration and authentication (fixes [#6](https://github.com/eidorb/ubank/issues/6)).
 - Automate releases.
 - Support Python 3.9+.
 - Migrate from Poetry to uv.
@@ -174,7 +180,7 @@ Publishing a release triggers this [workflow](.github/workflows/workflow.yml), w
 
 ### 1.1.0
 
-- Set `x-api-version` to fix #4 (thanks [@jakepronger](https://github.com/jakepronger)!)
+- Set `x-api-version` to fix [#4](https://github.com/eidorb/ubank/issues/4) (thanks [@jakepronger](https://github.com/jakepronger)!)
 
 
 ### 1.0.0
