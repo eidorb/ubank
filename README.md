@@ -16,7 +16,7 @@ Access [ubank](https://www.ubank.com.au)'s API with Python.
 
 ## Getting started
 
-Install the `ubank` package (Python 3.11+ required):
+Install the `ubank` package (Python 3.9+ required):
 
 ```console
 $ pip install ubank
@@ -168,7 +168,7 @@ Publishing a release triggers this [workflow](.github/workflows/workflow.yml), w
 
 - Implement passkey registration and authentication.
 - Automate releases.
-- Support Python 3.11+.
+- Support Python 3.9+.
 - Migrate from Poetry to uv.
 
 

@@ -3,7 +3,7 @@ name = "ubank"
 dynamic = ["version"]
 description = "Access ubank.com.au with Python"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.9"
 license = "MIT"
 authors = [{name = "eidorb"}]
 dependencies = [

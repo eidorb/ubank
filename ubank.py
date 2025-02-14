@@ -321,7 +321,11 @@ class Client(httpx.Client):
 
 def int8array_to_bytes(array: list[int]) -> bytes:
     """Converts Javascript Int8Array to unsigned bytes."""
-    return b"".join(int8.to_bytes(signed=True) for int8 in array)
+    return b"".join(
+        # length and byteorder must be specified for Python < 3.11.
+        int8.to_bytes(length=1, byteorder="big", signed=True)
+        for int8 in array
+    )
 
 
 def parse_public_key_credential_creation_options(string: str) -> dict:
