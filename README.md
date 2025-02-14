@@ -10,7 +10,7 @@ Access [ubank](https://www.ubank.com.au)'s API with Python.
 - [ubank API](#ubank-api)
 - [CLI help](#cli-help)
 - [Testing](#testing)
-- [Release](#release)
+- [How to publish a new release](#how-to-publish-a-new-release)
 - [Changelog](#changelog)
 
 
@@ -136,7 +136,7 @@ $ uv run pytest -v -k 'not test_ubank_client'
 A GitHub Actions [workflow](.github/workflows/workflow.yml) runs tests across a number of Python versions.
 
 
-## Release
+## How to publish a new release
 
 Bump project version with [hatch](https://hatch.pypa.io/latest/version/):
 
@@ -152,12 +152,18 @@ Update uv lockfile:
 $ uv lock
 ```
 
-Publish to PyPI:
+Create version tag and push to GitHub:
 
 ```console
-$ read -s PASSWORD
-$ poetry publish --build -u __token__ -p "$PASSWORD"
+$ git tag "v$(uvx hatch version)"
+$ git push origin "v$(uvx hatch version)"
+Total 0 (delta 0), reused 0 (delta 0), pack-reused 0
+To github.com:eidorb/ubank.git
+ * [new tag]         v2.0.0 -> v2.1.0
 ```
+
+Find the tag [here](https://github.com/eidorb/ubank/tags) and create a new release.
+Publishing a release triggers this [workflow](.github/workflows/workflow.yml), which builds and publishes the package to [PyPI](https://pypi.org/project/ubank/).
 
 
 ## Changelog
@@ -165,6 +171,7 @@ $ poetry publish --build -u __token__ -p "$PASSWORD"
 ### 2.0.0
 
 - Implement passkey registration and authentication.
+- Automate releases.
 - Support Python 3.11+.
 - Migrate from Poetry to uv.
 

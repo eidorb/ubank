@@ -1,7 +1,12 @@
 on:
+  # Run on any push to master.
   push:
     branches:
       - master
+  # Run on published releases.
+  release:
+    types:
+      - published
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -23,3 +28,26 @@ jobs:
           curl -LsSf https://astral.sh/uv/install.sh | sh
           uv python pin ${{ matrix.python-version }}
           uv run pytest -v -k 'not test_ubank_client'
+  publish:
+    needs: test
+    # Only publish if releasing.
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      # Allows JWT to be requested from GitHub's OIDC provider for publishing to PyPI.
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - id: cache
+        uses: actions/cache@v4
+        # Keep uv cache and Python virtual environment.
+        with:
+          key: ${{ hashFiles('pyproject.toml', 'uv.lock') }}
+          path: |
+            ~/.local/share/uv
+            .venv
+      - run: |
+          # Build and publish to PyPI.
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          uv build
+          uv publish
