@@ -16,7 +16,7 @@ Access [ubank](https://www.ubank.com.au)'s API with Python.
 
 ## Getting started
 
-Install the `ubank` package (Python 3.8+ required):
+Install the `ubank` package (Python 3.11+ required):
 
 ```console
 $ pip install ubank
@@ -202,6 +202,7 @@ $ poetry publish --build -u __token__ -p "$PASSWORD"
 ### 2.0.0
 
 - Implement passkey registration and authentication.
+- Support Python 3.11+.
 - Migrate from Poetry to uv.
 
 
