@@ -116,8 +116,6 @@ def test_serialize_assertion():
 def test_passkey_serialization(tmp_path):
     """Tests passkey de/serialization."""
     passkey = Passkey(passkey_name="test")
-    # Passkey created with constructor should not have filename attribute.
-    assert not hasattr(passkey, "filename")
 
     # Throw away attestation.
     passkey.create(
@@ -160,9 +158,6 @@ def test_passkey_serialization(tmp_path):
     with (tmp_path / "passkey.cbor").open("rb") as f:
         deserialized_passkey = Passkey.load(f)
 
-    # Passkey created with Passkey.load() should have filename attribute.
-    assert hasattr(deserialized_passkey, "filename")
-
     assert deserialized_passkey.passkey_name == passkey.passkey_name
     assert deserialized_passkey.hardware_id == passkey.hardware_id
     assert deserialized_passkey.device_meta == passkey.device_meta
@@ -198,7 +193,3 @@ def test_ubank_client():
             client.get("/app/v1/accounts").json()["linkedBanks"][0]["shortBankName"]
             == "ubank"
         )
-
-    # Updated passkey should be serialized automatically with updated sign_count.
-    with open("passkey.cbor", "rb") as f:
-        assert Passkey.load(f).sign_count == passkey.sign_count

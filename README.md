@@ -63,9 +63,6 @@ Spend account (TRANSACTION): 765.48 AUD
 Savings account (SAVINGS): 1577.17 AUD
 ```
 
-Passkeys increment an internal counter with each authentication attempt.
-`ubank.Client` automatically writes the updated passkey object to the passkey file after successful authentication.
-
 
 ## ubank API
 

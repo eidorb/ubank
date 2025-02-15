@@ -1,6 +1,7 @@
 import argparse
 import json
 import logging
+import time
 import uuid
 from base64 import b64encode
 from getpass import getpass
@@ -194,8 +195,6 @@ class Passkey(soft_webauthn.SoftWebauthnDevice):
             password=None,
             backend=soft_webauthn.default_backend(),
         )
-        # Maintain reference to serialized passkey filename.
-        passkey.filename = file.name
         return passkey
 
 
@@ -236,6 +235,12 @@ class Client(httpx.Client):
                 "x-device-meta": passkey.device_meta,
             },
         ) as client:
+            # Hack signature counter to Unix time. This 32-bit counter value can
+            # be incremented by *any* positive value. By using Unix time, we don't
+            # have to muck about keeping track of counter values in the passkey file.
+            # https://www.w3.org/TR/webauthn-2/#signature-counter
+            passkey.sign_count = int(time.time())
+
             # Initiate authentication flow to receive challenge from relying party
             # (ubank).
             response = client.get(
@@ -278,9 +283,6 @@ class Client(httpx.Client):
                 response.raise_for_status()
             except httpx.HTTPStatusError as e:
                 raise ValueError(f"{response.status_code=} {response.text=}") from e
-            # Serialize passkey to file after successful authentication.
-            with open(passkey.filename, "wb") as f:
-                passkey.dump(f)
             # Set access and auth token headers for future requests.
             self.access_token = client.headers["x-access-token"] = client.headers[
                 "x-auth-token"
