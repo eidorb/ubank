@@ -221,6 +221,18 @@ wheels = [
 ]
 
 [[package]]
+name = "meatie"
+version = "0.1.20"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/5c/9a/f8c117466d6a40f1f75cafb1d7427fe5ac8178715703342887929d284120/meatie-0.1.20.tar.gz", hash = "sha256:81213183dec8b87b14dd264d19d485dd754d8d70f9502593dcb3b8326a401c6e", size = 26769 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f3/5b/4be7ab7b9fe30849f24153a9aef7ae2fd1229d2abad87f8c21d40ea830cb/meatie-0.1.20-py3-none-any.whl", hash = "sha256:7d4f28ba39a7b59683de954ac4ccc6a6c5ed58c2e84a2fe22195350ac9ee9ca9", size = 51252 },
+]
+
+[[package]]
 name = "packaging"
 version = "24.2"
 source = { registry = "https://pypi.org/simple" }
@@ -339,6 +351,7 @@ name = "ubank"
 source = { editable = "." }
 dependencies = [
     { name = "httpx" },
+    { name = "meatie" },
     { name = "soft-webauthn" },
 ]
 
@@ -350,6 +363,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "httpx", specifier = ">=0.28.1" },
+    { name = "meatie", specifier = ">=0.1.20" },
     { name = "soft-webauthn", specifier = ">=0.1.4" },
 ]
 

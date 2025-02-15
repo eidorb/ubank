@@ -8,6 +8,7 @@ license = "MIT"
 authors = [{name = "eidorb"}]
 dependencies = [
     "httpx>=0.28.1",
+    "meatie>=0.1.20",
     "soft-webauthn>=0.1.4",
 ]
 
