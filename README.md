@@ -3,17 +3,6 @@
 Access [ubank](https://www.ubank.com.au)'s API with Python.
 
 
-## Contents
-
-- [Contents](#contents)
-- [Getting started](#getting-started)
-- [ubank API](#ubank-api)
-- [CLI help](#cli-help)
-- [Testing](#testing)
-- [How to publish a new release](#how-to-publish-a-new-release)
-- [Changelog](#changelog)
-
-
 ## Getting started
 
 Install the `ubank` package (Python 3.9+ required):
@@ -62,6 +51,18 @@ Account balances
 Spend account (TRANSACTION): 765.48 AUD
 Savings account (SAVINGS): 1577.17 AUD
 ```
+
+
+## Contents
+
+- [Getting started](#getting-started)
+- [Contents](#contents)
+- [ubank API](#ubank-api)
+- [CLI help](#cli-help)
+- [How to set up a development environment](#how-to-set-up-a-development-environment)
+- [How to test](#how-to-test)
+- [How to publish a new release](#how-to-publish-a-new-release)
+- [Changelog](#changelog)
 
 
 ## ubank API
@@ -114,23 +115,47 @@ options:
 ```
 
 
-## Testing
+## How to set up a development environment
 
-Run tests locally:
+Install [uv](https://docs.astral.sh/uv/):
 
-```python
-$ uv run pytest -v
+```shell
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+Clone this repository:
+
+```shell
+git clone git@github.com:eidorb/ubank.git
+cd ubank
+```
+
+uv ensures the correct Python interpreter and packages are installed:
+
+```console
+$ uv run python -c 'import ubank; print(ubank.__version__)'
+Using CPython 3.13.2 interpreter at: /opt/homebrew/opt/python@3.13/bin/python3.13
+Creating virtual environment at: .venv
+Installed 17 packages in 22ms
+2.0.0
+```
+
+
+## How to test
+
+Run all tests:
+
+```shell
+uv run pytest -v
 ```
 
 `test_ubank_client` requires a valid `passkey.cbor` file for testing ubank
 authentication.
 Skip this test using the following expression:
 
-```python
-$ uv run pytest -v -k 'not test_ubank_client'
+```shell
+uv run pytest -v -k 'not test_ubank_client'
 ```
-
-A GitHub Actions [workflow](.github/workflows/workflow.yml) runs tests across a number of Python versions.
 
 
 ## How to publish a new release

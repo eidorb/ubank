@@ -201,10 +201,10 @@ class Passkey(soft_webauthn.SoftWebauthnDevice):
 class Client(httpx.Client):
     """ubank API client based on httpx.Client.
 
-    This class is initialised with a `Passkey` obtained from `add_passkey()`.
+    Requests are authenticated using the supplied passkey.
 
-    It's recommended to use this class as a context manager. This ensures ubank
-    sessions and HTTP connections are properly cleaned when leaving the `with` block:
+    Use this class as a context manager to ensure ubank sessions and HTTP connections
+    are properly closed.
 
     ```python
     with Client(passkey) as client:
@@ -221,9 +221,6 @@ class Client(httpx.Client):
 
     def __init__(self, passkey: Passkey) -> None:
         """Initialises ubank session using passkey to authenticate.
-
-        The passkey's `sign_count` attribute is incremented each time it is used.
-        Be sure to store the updated passkey after use.
 
         :param passkey: `Passkey` registered with ubank
         """
