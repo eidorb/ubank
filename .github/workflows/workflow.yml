@@ -10,23 +10,24 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
       - id: cache
         uses: actions/cache@v4
         # Keep uv cache and Python virtual environment.
         with:
-          key: ${{ hashFiles('pyproject.toml', 'uv.lock') }}-${{ matrix.python-version }}
+          key: ${{ hashFiles('pyproject.toml', 'uv.lock') }}
           path: |
             ~/.local/share/uv
             .venv
       - run: |
-          # Run tests.
+          # Test
           curl -LsSf https://astral.sh/uv/install.sh | sh
-          uv run --python ${{ matrix.python-version }} -m pytest -v
+          uv run --python 3.9 -m pytest -v
+          uv run --python 3.10 -m pytest -v
+          uv run --python 3.11 -m pytest -v
+          uv run --python 3.12 -m pytest -v
+          uv run --python 3.13 -m pytest -v
   publish:
     needs: test
     # Only publish if releasing.
