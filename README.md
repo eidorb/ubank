@@ -148,15 +148,7 @@ Installed 17 packages in 22ms
 Run all tests:
 
 ```shell
-uv run pytest -v
-```
-
-`test_ubank_client` requires a valid `passkey.cbor` file for testing ubank
-authentication.
-Skip this test using the following expression:
-
-```shell
-uv run pytest -v -k 'not test_ubank_client'
+uv run -m pytest -v
 ```
 
 

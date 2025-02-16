@@ -1,11 +1,11 @@
 from base64 import urlsafe_b64encode
 from datetime import date
 
+import pytest
 from cryptography.hazmat.primitives import serialization
 
 from ubank import (
     Api,
-    Client,
     Passkey,
     TransactionsSearchBody,
     __version__,
@@ -184,30 +184,24 @@ def test_passkey_serialization(tmp_path):
     assert deserialized_passkey.sign_count == passkey.sign_count
 
 
-def test_ubank_client():
-    """Tests Client using passkey loaded from file."""
-    # Load passkey from file.
-    with open("passkey.cbor", "rb") as f:
-        passkey = Passkey.load(f)
+def test_api():
+    """Tests declared API methods using passkey loaded from file."""
+    # Skip test if hard-coded passkey file is not available.
+    try:
+        with open("passkey.cbor", "rb") as f:
+            passkey = Passkey.load(f)
+    except FileNotFoundError as e:
+        pytest.skip(str(e))
 
     # Authenticate to ubank with passkey.
-    with Client(passkey=passkey) as client:
+    with Api(passkey) as api:
         assert (
-            client.get("accounts").json()["linkedBanks"][0]["accounts"][0]["balance"][
-                "currency"
-            ]
+            api.client.get("accounts").json()["linkedBanks"][0]["accounts"][0][
+                "balance"
+            ]["currency"]
             == "AUD"
         )
 
-
-def test_api():
-    """Tests API client methods and model validation."""
-    # Load passkey from file.
-    with open("passkey.cbor", "rb") as f:
-        passkey = Passkey.load(f)
-
-    # Authenticate to ubank with passkey.
-    with Api(passkey=passkey) as api:
         customer = api.get_customer_details()
         assert customer.addresses[0].addressFormat == "AUS"
         accounts = api.get_accounts()
