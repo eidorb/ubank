@@ -1,10 +1,13 @@
 from base64 import urlsafe_b64encode
+from datetime import date
 
 from cryptography.hazmat.primitives import serialization
 
 from ubank import (
+    Api,
     Client,
     Passkey,
+    TransactionsSearchBody,
     __version__,
     int8array_to_bytes,
     parse_public_key_credential_creation_options,
@@ -115,7 +118,7 @@ def test_serialize_assertion():
 
 def test_passkey_serialization(tmp_path):
     """Tests passkey de/serialization."""
-    passkey = Passkey(passkey_name="test")
+    passkey = Passkey(name="test")
 
     # Throw away attestation.
     passkey.create(
@@ -158,7 +161,7 @@ def test_passkey_serialization(tmp_path):
     with (tmp_path / "passkey.cbor").open("rb") as f:
         deserialized_passkey = Passkey.load(f)
 
-    assert deserialized_passkey.passkey_name == passkey.passkey_name
+    assert deserialized_passkey.name == passkey.name
     assert deserialized_passkey.hardware_id == passkey.hardware_id
     assert deserialized_passkey.device_meta == passkey.device_meta
     assert deserialized_passkey.device_id == passkey.device_id
@@ -188,10 +191,48 @@ def test_ubank_client():
         passkey = Passkey.load(f)
 
     # Authenticate to ubank with passkey.
-    with Client(passkey) as client:
+    with Client(passkey=passkey) as client:
         assert (
             client.get("accounts").json()["linkedBanks"][0]["accounts"][0]["balance"][
                 "currency"
             ]
             == "AUD"
         )
+
+
+def test_api():
+    """Tests API client methods and model validation."""
+    # Load passkey from file.
+    with open("passkey.cbor", "rb") as f:
+        passkey = Passkey.load(f)
+
+    # Authenticate to ubank with passkey.
+    with Api(passkey=passkey) as api:
+        customer = api.get_customer_details()
+        assert customer.addresses[0].addressFormat == "AUS"
+        accounts = api.get_accounts()
+        assert accounts.linkedBanks[0].accounts[0].balance.currency == "AUD"
+        assert (
+            api.get_accounts_summary().linkedBanks[0].accounts[0].balance.currency
+            == "AUD"
+        )
+        assert api.post_accounts_transactions_search(
+            body=TransactionsSearchBody(
+                fromDate=date(2024, 1, 1), toDate=date(2025, 1, 1), limit=100
+            )
+        )
+        for account in accounts.linkedBanks[0].accounts:
+            assert api.get_account_transactions(
+                account_id=account.id,
+                bank_id=accounts.linkedBanks[0].bankId,
+                customerId=customer.customerId,
+            )
+        assert api.get_cards()
+        # Name of a device should match this passkey.
+        assert [
+            device
+            for device in api.get_devices(deviceUuid=passkey.device_id)
+            if device.deviceName == passkey.name
+        ]
+        assert api.delete_device(device_id="test-2f9ae784c84d")
+        assert api.get_contacts()

@@ -24,3 +24,6 @@ build-backend = "hatchling.build"
 
 [tool.hatch.version]
 path = "ubank.py"
+
+[project.scripts]
+ubank = "ubank:cli"

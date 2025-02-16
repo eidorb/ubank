@@ -5,16 +5,16 @@ Access [ubank](https://www.ubank.com.au)'s API with Python.
 
 ## Getting started
 
-Install the `ubank` package (Python 3.9+ required):
+Install [uv](https://docs.astral.sh/uv/):
 
-```console
-$ pip install ubank
+```shell
+curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
 Register a new passkey with ubank:
 
 ```console
-$ python -m ubank name@domain.com --output passkey.cbor
+$ uvx --from git+https://github.com/eidorb/ubank ubank name@domain.com --output passkey.cbor
 Enter ubank password:
 Enter security code sent to 04xxxxx789: 123456
 ```
@@ -26,28 +26,37 @@ You'll be prompted for your ubank username and SMS security code.
 > Your passkey grants access to your bank account.
 > It is **your** responsibility to keep it safe!
 
-Use your passkey to access ubank's API in a Python script:
+Create a script named `balances.py`:
 
 ```python
-from ubank import Client, Passkey
+# /// script
+# requires-python = ">=3.9"
+# dependencies = [
+#     "ubank",
+# ]
+#
+# [tool.uv.sources]
+# ubank = { git = "https://github.com/eidorb/ubank" }
+# ///
+
+from ubank import Api, Passkey
 
 # Load passkey from file.
 with open("passkey.cbor", "rb") as f:
     passkey = Passkey.load(f)
 
-# Authenticate to ubank with passkey and print account balances.
-with Client(passkey) as client:
-    print("Account balances")
-    for account in client.get("/app/v1/accounts").json()["linkedBanks"][0]["accounts"]:
+# Authenticate to ubank with passkey.
+with Api(passkey) as api:
+    for account in api.get_accounts().linkedBanks[0].accounts:
         print(
-            f"{account['label']} ({account['type']}): {account['balance']['available']} {account['balance']['currency']}"
+            f"{account.label} ({account.type}): {account.balance.available} {account.balance.currency}"
         )
 ```
 
-Resulting in the following output:
+Run it with uv:
 
-```
-Account balances
+```console
+$ uv run balances.py
 Spend account (TRANSACTION): 765.48 AUD
 Savings account (SAVINGS): 1577.17 AUD
 ```
@@ -57,47 +66,18 @@ Savings account (SAVINGS): 1577.17 AUD
 
 - [Getting started](#getting-started)
 - [Contents](#contents)
-- [ubank API](#ubank-api)
 - [CLI help](#cli-help)
+- [ubank API](#ubank-api)
 - [How to set up a development environment](#how-to-set-up-a-development-environment)
 - [How to test](#how-to-test)
 - [How to publish a new release](#how-to-publish-a-new-release)
 - [Changelog](#changelog)
 
 
-## ubank API
-
-`ubank.Client` is an [`httpx.Client`](https://www.python-httpx.org/advanced/clients/)
-with a familiar requests-style interface.
-Its `base_url` is set to `https://api.ubank.com.au/app/v1/`, so use a relative path when making requests.
-
-Here are some API endpoints to try (can you find more?):
-
-```python
-with Client(passkey) as client:
-    print(client.get("accounts").json())
-    print(client.get("accounts/summary").json())
-    print(client.get("achievements").json())
-    print(client.get("campaigns").json())
-    print(client.get("cards").json())
-    print(client.get("contacts").json())
-    print(client.get("customer-details").json())
-    print(client.get("insights").json())
-    print(client.get("insights/interest").json())
-    print(client.get("products").json())
-    print(client.get("promotions").json())
-    print(client.get("savings-goals").json())
-    print(client.get("tfn").json())
-```
-
-`ubank.Client` is intended to be used as a context manager.
-This ensures ubank sessions and HTTP connections are ended properly when leaving the `with` block.
-
-
 ## CLI help
 
 ```console
-$ python -m ubank --help
+$ uvx ubank --help
 usage: ubank.py [-h] [-o FILE] [-n PASSKEY_NAME] [-v] username
 
 Registers new passkey with ubank. You will be asked for your ubank password and secret code interactively.
@@ -115,13 +95,34 @@ options:
 ```
 
 
-## How to set up a development environment
+## ubank API
 
-Install [uv](https://docs.astral.sh/uv/):
+`ubank.Api` provides a number of methods for accessing ubank's API:
 
-```shell
-curl -LsSf https://astral.sh/uv/install.sh | sh
+```python
+from datetime import date
+
+from ubank import Api, Passkey, TransactionsSearchBody
+
+with open("passkey.cbor", "rb") as f:
+    passkey = Passkey.load(f)
+
+with Api(passkey) as api:
+    api.post_accounts_transactions_search(
+        body=TransactionsSearchBody(fromDate=date(2025, 1, 1), toDate=date(2025, 2, 1))
+    )
+    bank = api.get_accounts().linkedBanks[0]
+    api.get_account_transactions(
+        account_id=bank.accounts[0].id,
+        bank_id=bank.bankId,
+        customerId=api.get_customer_details().customerId,
+    )
+    api.get_cards()
+    api.get_contacts()
 ```
+
+
+## How to set up a development environment
 
 Clone this repository:
 
@@ -130,7 +131,8 @@ git clone git@github.com:eidorb/ubank.git
 cd ubank
 ```
 
-uv ensures the correct Python interpreter and packages are installed:
+uv ensures Python dependencies compatible with those defined in [`pyproject.toml`](pyproject.toml)
+are automatically installed:
 
 ```console
 $ uv run python -c 'import ubank; print(ubank.__version__)'

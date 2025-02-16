@@ -1,17 +1,25 @@
+"""Access ubank with Python."""
+
 import argparse
 import json
 import logging
 import time
 import uuid
 from base64 import b64encode
+from datetime import date, datetime
+from decimal import Decimal
 from getpass import getpass
-from typing import IO
+from typing import IO, Optional
 
 import httpx
 import soft_webauthn
 from cryptography.hazmat.primitives import serialization
+from meatie import endpoint
+from meatie_httpx import Client as MeatieClient
+from pydantic import BaseModel, Field
 
 __version__ = "2.0.0"
+
 
 # Unchanging headers in every request.
 base_headers = {
@@ -24,16 +32,191 @@ base_headers = {
 origin = "https://www.ubank.com.au"
 
 
+class Address(BaseModel):
+    addressFormat: Optional[str]
+    addressType: Optional[str]
+    flatOrBoxNumber: Optional[str]
+    flatOrBoxType: Optional[str]
+    postcode: Optional[str]
+    propertyName: Optional[str]
+    state: Optional[str]
+    streetName: Optional[str]
+    streetNumber: Optional[str]
+    streetType: Optional[str]
+    suburb: Optional[str]
+
+
+class CustomerDetails(BaseModel):
+    addresses: list[Address]
+    countriesOfCitizenship: list[str]
+    customerId: Optional[str]
+    dateCreated: date
+    dateOfBirth: date
+    email: Optional[str]
+    emailVerified: bool
+    fatcaCrsProvided: bool
+    firstName: Optional[str]
+    middleName: Optional[str]
+    lastName: Optional[str]
+    additionalNames: Optional[str]
+    mobileNumber: Optional[str]
+    externalCustomerNumber: Optional[str]
+    jurisdictionSourceOfWealth: list
+    natureAndPurposeOfRelationship: list
+    nonResidentTaxDetails: list
+    occupationId: Optional[str]
+    title: Optional[str]
+    userId: str
+    financialCrime: dict
+    editAddressEnabled: bool
+
+
+class Balance(BaseModel):
+    currency: str
+    current: float
+    available: float
+
+
+class Account(BaseModel):
+    id: str
+    number: str
+    bsb: str
+    label: str
+    nickname: str
+    type: str
+    balance: Balance
+    status: str
+    lastBalanceRefresh: datetime
+    openDate: datetime
+    isJointAccount: bool
+    depositProductData: dict
+    metadata: Optional[dict] = None
+
+
+class LinkedBank(BaseModel):
+    bankId: int
+    shortBankName: str
+    accounts: list[Account]
+
+
+class AccountsResponse(BaseModel):
+    linkedBanks: list[LinkedBank]
+
+
+class Value(BaseModel):
+    amount: Decimal
+    currency: str
+
+
+class From(BaseModel):
+    name: Optional[str] = None
+    legalName: Optional[str] = None
+    bsb: Optional[str] = None
+    number: Optional[str] = None
+    description: Optional[str] = None
+
+
+To = From
+
+
+class Transaction(BaseModel):
+    id: str
+    cbsId: str
+    bankId: str
+    accountId: str
+    posted: datetime
+    completed: datetime
+    value: Value
+    type: str
+    shortDescription: str
+    # Everything else seems optional.
+    narration: Optional[Value] = None
+    balance: Optional[Value] = None
+    debitOrCredit: Optional[str] = None
+    description: Optional[str] = None
+    category: Optional[str] = None
+    paymentScheme: Optional[str] = None
+    receiptNumber: Optional[str] = None
+    from_: Optional[From] = Field(default=None, alias="from")
+    bpayBiller: Optional[dict] = None
+    to: Optional[To] = None
+    walletType: Optional[str] = None
+    cardNumber: Optional[str] = None
+    nppTransactionId: Optional[str] = None
+    nppServiceOverlay: Optional[str] = None
+    nppCategoryPurposeCode: Optional[str] = None
+    nppCreditorReference: Optional[str] = None
+    nppIdentification: Optional[str] = None
+    nppSchemeName: Optional[str] = None
+    terminalId: Optional[str] = None
+    systemTraceAuditNumber: Optional[str] = None
+    visaTerminalId: Optional[str] = None
+    typeCode: Optional[str] = None
+    longDescription: Optional[str] = None
+    lwc: Optional[dict] = None
+
+
+class TransactionsSearchResponse(BaseModel):
+    nextPageId: str
+    totalCount: int
+    totalAmount: str
+    transactions: list[Transaction]
+
+
+class TransactionsSearchBody(BaseModel):
+    timezone: str = "Etc/UTC"
+    fromDate: date
+    toDate: date
+    limit: int = 5
+
+
+class TransactionsResponse(BaseModel):
+    nextPageId: str
+    transactions: list[Transaction]
+    pendingTransactions: list
+
+
+class Device(BaseModel):
+    type: str
+    deviceUuid: str
+    deviceName: str
+    deviceCreatedOn: Optional[str] = None
+    dateCreated: int
+    dateCreatedTimestamp: datetime
+    enabled: bool
+    isEditable: bool
+
+
+class Card(BaseModel):
+    accountIds: list[str]
+    cardToken: str
+    cardNumber: str
+    bankId: int
+    cardId: str
+    nameOnCard: str
+    cardStatus: str
+    expiryDate: str
+    cardType: str
+    panReferenceId: str
+    locked: bool
+    cardArtName: str
+    lastProductionDate: datetime
+    cardControls: list[dict]
+
+
+class CardsResponse(BaseModel):
+    cards: list[Card]
+    cardReplacements: list
+
+
 class Passkey(soft_webauthn.SoftWebauthnDevice):
     """Extends SoftWebauthnDevice with ubank-specific attributes and serialization
     methods."""
 
-    def __init__(
-        self, passkey_name: str, app_version="11.103.3", device_name="iPhone17-3"
-    ):
+    def __init__(self, name: str, app_version="11.103.3", device_name="iPhone17-3"):
         """Initialise your passkey with a name.
 
-        :param passkey_name: Set passkey name (shown in ubank app)
+        :param name: Set passkey name (shown in ubank app)
         :param app_version: Set ubank application version identifier. See versions here:
             https://apps.apple.com/au/app/id1449543099.
         :param device_name: Set device identifier. See "Hardware strings" row in this
@@ -41,7 +224,7 @@ class Passkey(soft_webauthn.SoftWebauthnDevice):
             with hyphen.
         """
         super().__init__()
-        self.passkey_name = passkey_name
+        self.name = name
         # Generate a fresh hardware ID.
         self.hardware_id = str(uuid.uuid4())
         # Start with an empty device ID. ubank will assign one later.
@@ -187,7 +370,7 @@ class Passkey(soft_webauthn.SoftWebauthnDevice):
     def load(cls, file: IO[bytes]):
         """Deserializes passkey from `file`."""
         passkey_dict = soft_webauthn.cbor.decode(file.read())
-        passkey = Passkey(passkey_dict["passkey_name"])
+        passkey = Passkey(passkey_dict["name"])
         for name, value in passkey_dict.items():
             setattr(passkey, name, value)
         passkey.private_key = serialization.load_pem_private_key(
@@ -196,6 +379,54 @@ class Passkey(soft_webauthn.SoftWebauthnDevice):
             backend=soft_webauthn.default_backend(),
         )
         return passkey
+
+
+class Api(MeatieClient):
+    """Some useful ubank API endpoints.
+
+    Meatie translates these annotated method signatures into code that performs
+    the underlying HTTP requests model validation.
+    """
+
+    def __init__(self, passkey: Passkey) -> None:
+        super().__init__(Client(passkey))
+
+    @endpoint("customer-details")
+    def get_customer_details(self) -> CustomerDetails: ...
+
+    @endpoint("accounts")
+    def get_accounts(self) -> AccountsResponse: ...
+
+    @endpoint("accounts/summary")
+    def get_accounts_summary(self) -> AccountsResponse: ...
+
+    @endpoint("accounts/{account_id}/bank/{bank_id}/transactions")
+    def get_account_transactions(
+        self,
+        account_id: str,
+        bank_id: str,
+        customerId: str,
+        limit: int = 50,
+        pageId: str = "",
+        query: str = "",
+    ) -> TransactionsResponse: ...
+
+    @endpoint("accounts/transactions/search")
+    def post_accounts_transactions_search(
+        self, body: TransactionsSearchBody
+    ) -> TransactionsSearchResponse: ...
+
+    @endpoint("cards")
+    def get_cards(self) -> CardsResponse: ...
+
+    @endpoint("v2/devices")
+    def get_devices(self, deviceUuid: str) -> list[Device]: ...
+
+    @endpoint("device/{device_id}")
+    def delete_device(self, device_id: str) -> str: ...
+
+    @endpoint("contacts")
+    def get_contacts(self) -> dict: ...
 
 
 class Client(httpx.Client):
@@ -540,7 +771,7 @@ def add_passkey(
         return passkey
 
 
-if __name__ == "__main__":
+def cli():
     parser = argparse.ArgumentParser(
         description="Registers new passkey with ubank. "
         "You will be asked for your ubank password and secret code interactively.",
@@ -573,3 +804,7 @@ if __name__ == "__main__":
         password=getpass("Enter ubank password: "),
         passkey_name=args.passkey_name,
     ).dump(args.file)
+
+
+if __name__ == "__main__":
+    cli()
