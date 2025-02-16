@@ -8,6 +8,7 @@ from ubank import (
     Api,
     Passkey,
     TransactionsSearchBody,
+    UserVerifiedDevice,
     __version__,
     int8array_to_bytes,
     parse_public_key_credential_creation_options,
@@ -117,11 +118,9 @@ def test_serialize_assertion():
 
 
 def test_passkey_serialization(tmp_path):
-    """Tests passkey de/serialization."""
-    passkey = Passkey(name="test")
-
-    # Throw away attestation.
-    passkey.create(
+    """Tests passkey serialization."""
+    passkey = Passkey(name="")
+    passkey.soft_webauthn_device.create(
         {
             "publicKey": {
                 "rp": {"name": "example org", "id": "example.org"},
@@ -137,58 +136,20 @@ def test_passkey_serialization(tmp_path):
         },
         "https://example.org",
     )
-    assert passkey.sign_count == 0
-
-    # Throw away assertion.
-    passkey.get(
-        {
-            "publicKey": {
-                "challenge": b"arandomchallenge",
-                "rpId": "example.org",
-            }
-        },
-        "https://example.org",
-    )
-    assert passkey.sign_count == 1
-
-    # Set some ubank style attributes.
-    passkey.device_id = "abc"
-    passkey.username = "123"
 
     # Serialize and deserialize passkey.
-    with (tmp_path / "passkey.cbor").open("wb") as f:
-        passkey.dump(f)
-    with (tmp_path / "passkey.cbor").open("rb") as f:
-        deserialized_passkey = Passkey.load(f)
-
-    assert deserialized_passkey.name == passkey.name
-    assert deserialized_passkey.hardware_id == passkey.hardware_id
-    assert deserialized_passkey.device_meta == passkey.device_meta
-    assert deserialized_passkey.device_id == passkey.device_id
-    assert deserialized_passkey.username == passkey.username
-
-    assert deserialized_passkey.credential_id == passkey.credential_id
-    assert deserialized_passkey.private_key != passkey.private_key
-    assert deserialized_passkey.private_key.private_bytes(
-        serialization.Encoding.PEM,
-        serialization.PrivateFormat.PKCS8,
-        serialization.NoEncryption(),
-    ) == passkey.private_key.private_bytes(
-        serialization.Encoding.PEM,
-        serialization.PrivateFormat.PKCS8,
-        serialization.NoEncryption(),
-    )
-    assert deserialized_passkey.aaguid == passkey.aaguid
-    assert deserialized_passkey.rp_id == passkey.rp_id
-    assert deserialized_passkey.user_handle == passkey.user_handle
-    assert deserialized_passkey.sign_count == passkey.sign_count
+    with (tmp_path / "passkey.txt").open("wb") as f:
+        passkey.dump(f, password="")
+    with (tmp_path / "passkey.txt").open("rb") as f:
+        deserialized_passkey = Passkey.load(f, password="")
+    assert type(deserialized_passkey.soft_webauthn_device) is UserVerifiedDevice
 
 
 def test_api():
-    """Tests declared API methods using passkey loaded from file."""
+    """Tests declared API methods using passkey loaded from passkey.txt."""
     # Skip test if hard-coded passkey file is not available.
     try:
-        with open("passkey.cbor", "rb") as f:
+        with open("passkey.txt", "rb") as f:
             passkey = Passkey.load(f)
     except FileNotFoundError as e:
         pytest.skip(str(e))

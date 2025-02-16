@@ -1,22 +1,36 @@
-"""Access ubank with Python."""
+"""Access ubank's API using Python.
+
+Run as a script to create a new passkey.
+
+The Api class is a ubank API client.
+
+The Client class is lower level HTTP client that uses passkey authentication.
+"""
+
+from __future__ import annotations
 
 import argparse
 import json
 import logging
 import time
 import uuid
-from base64 import b64encode
+from base64 import b64encode, urlsafe_b64encode
 from datetime import date, datetime
 from decimal import Decimal
 from getpass import getpass
-from typing import IO, Optional
+from typing import IO, AnyStr, Optional
 
 import httpx
 import soft_webauthn
-from cryptography.hazmat.primitives import serialization
+from cryptography.fernet import Fernet
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+from fido2 import cbor
 from meatie import endpoint
 from meatie_httpx import Client as MeatieClient
 from pydantic import BaseModel, Field
+from soft_webauthn import SoftWebauthnDevice
 
 __version__ = "2.0.0"
 
@@ -28,7 +42,7 @@ base_headers = {
     "x-private-api-key": "ANZf5WgzmVLmTUwAQyuCq7LspXF2pd4N",
 }
 
-# Used in passkey creation and various requests.
+# Referenced in Client and add_passkey() for attestation and assertion.
 origin = "https://www.ubank.com.au"
 
 
@@ -164,7 +178,7 @@ class TransactionsSearchResponse(BaseModel):
 
 
 class TransactionsSearchBody(BaseModel):
-    timezone: str = "Etc/UTC"
+    timezone: str = "Australia/Lord_Howe"
     fromDate: date
     toDate: date
     limit: int = 5
@@ -209,32 +223,27 @@ class CardsResponse(BaseModel):
     cardReplacements: list
 
 
-class Passkey(soft_webauthn.SoftWebauthnDevice):
-    """Extends SoftWebauthnDevice with ubank-specific attributes and serialization
-    methods."""
+class Passkey:
+    """Represents a passkey registered with ubank."""
 
-    def __init__(self, name: str, app_version="11.103.3", device_name="iPhone17-3"):
-        """Initialise your passkey with a name.
-
-        :param name: Set passkey name (shown in ubank app)
-        :param app_version: Set ubank application version identifier. See versions here:
-            https://apps.apple.com/au/app/id1449543099.
-        :param device_name: Set device identifier. See "Hardware strings" row in this
-            table: https://en.wikipedia.org/wiki/List_of_iPhone_models. Replace comma
-            with hyphen.
-        """
+    def __init__(self, name: str):
+        """name is passkey/device name shown in emails and app."""
         super().__init__()
         self.name = name
         # Generate a fresh hardware ID.
-        self.hardware_id = str(uuid.uuid4())
+        hardware_id = str(uuid.uuid4())
         # Start with an empty device ID. ubank will assign one later.
-        self.device_id = ""
-        # Build device meta string from app version and device name.
-        self.device_meta = json.dumps(
+        device_id = ""
+        # Hard coded Build device meta string from app version and device name.
+        device_meta = json.dumps(
             {
-                "appVersion": app_version,
-                "binaryVersion": app_version,
-                "deviceName": device_name,
+                # Keep track with the latest version in case API blocks old versions: https://apps.apple.com/au/app/id1449543099.
+                "appVersion": "11.103.3",
+                "binaryVersion": "11.103.3",
+                # Keep track with latest iPhone model in case API blocks old models.
+                # Matches format of "Hardware strings" row in this table, replacing ',' with '-':
+                # https://en.wikipedia.org/wiki/List_of_iPhone_models
+                "deviceName": "iPhone17-3",
                 "environment": "production",
                 "instance": "live",
                 "native": True,
@@ -242,9 +251,63 @@ class Passkey(soft_webauthn.SoftWebauthnDevice):
             }
         )
         # Start with empty username, it will be assigned by ubank later.
-        self.username = ""
+        username = ""
+        self.name = name
+        self.hardware_id = hardware_id
+        self.device_id = device_id
+        self.device_meta = device_meta
+        self.username = username
+        self.soft_webauthn_device = UserVerifiedDevice()
 
-    # TODO: Remove if custom flag support merged https://github.com/bodik/soft-webauthn/pull/15
+    def dump(self, file: IO[bytes], password: str = ""):
+        """Serializes passkey to file, encrypted with a password.
+
+        Uses the following as a guide for password encryption: https://cryptography.io/en/latest/fernet/#using-passwords-with-fernet
+
+        This uses a hardcoded salt because I'm not interested in additionally keeping
+        track of unique salts. A password alone will have to be good enough!
+
+        AI suggests generating random hardcoded salts, derived from a hash of password.
+        But I'm hard coding it to b"". Not sure random hardcoded salts give benefit
+        in this case. If someone knows your password, you're popped!
+
+        Not supplying a password encrypts the file using a key derived from an empty string.
+        """
+        fernet = Fernet(derive_key(password))
+        file.write(
+            fernet.encrypt(
+                cbor.encode(
+                    {
+                        "name": self.name,
+                        "hardware_id": self.hardware_id,
+                        "device_id": self.device_id,
+                        "device_meta": self.device_meta,
+                        "username": self.username,
+                        "soft_webauthn_device_dict": to_dict(self.soft_webauthn_device),
+                    }
+                )
+            )
+        )
+
+    @classmethod
+    def load(cls, file: IO[AnyStr], password: str = "") -> Passkey:
+        """Deserializes passkey from `file`, decrypted with `password`."""
+        fernet = Fernet(derive_key(password))
+        deserialized_passkey = cbor.decode(fernet.decrypt(file.read()))
+        passkey = Passkey(deserialized_passkey["name"])
+        passkey.hardware_id = deserialized_passkey["hardware_id"]
+        passkey.device_id = deserialized_passkey["device_id"]
+        passkey.device_meta = deserialized_passkey["device_meta"]
+        passkey.username = deserialized_passkey["username"]
+        passkey.soft_webauthn_device = from_dict(
+            deserialized_passkey["soft_webauthn_device_dict"]
+        )
+        return passkey
+
+
+class UserVerifiedDevice(SoftWebauthnDevice):
+    """Software webauthn device with UV bit flag ALWAYS set."""
+
     def create(self, options, origin):
         """IDENTICAL to super().create(), except User Verification flag set."""
         if {"alg": -7, "type": "public-key"} not in options["publicKey"][
@@ -306,7 +369,6 @@ class Passkey(soft_webauthn.SoftWebauthnDevice):
             "type": "public-key",
         }
 
-    # TODO: Remove if custom flag support merged https://github.com/bodik/soft-webauthn/pull/15
     def get(self, options, origin):
         """IDENTICAL to super().create(), except User Verification flag set."""
 
@@ -354,38 +416,24 @@ class Passkey(soft_webauthn.SoftWebauthnDevice):
             "type": "public-key",
         }
 
-    # TODO: Replace if serialization PR merged https://github.com/bodik/soft-webauthn/pull/11
-    def dump(self, file: IO[bytes]):
-        """Serializes passkey to `file`."""
-        passkey_dict = {name: value for name, value in vars(self).items()}
-        passkey_dict["private_key"] = self.private_key.private_bytes(
-            serialization.Encoding.PEM,
-            serialization.PrivateFormat.PKCS8,
-            serialization.NoEncryption(),
-        )
-        file.write(soft_webauthn.cbor.dump_dict(passkey_dict))
-
-    # TODO: Replace if serialization PR merged https://github.com/bodik/soft-webauthn/pull/11
-    @classmethod
-    def load(cls, file: IO[bytes]):
-        """Deserializes passkey from `file`."""
-        passkey_dict = soft_webauthn.cbor.decode(file.read())
-        passkey = Passkey(passkey_dict["name"])
-        for name, value in passkey_dict.items():
-            setattr(passkey, name, value)
-        passkey.private_key = serialization.load_pem_private_key(
-            passkey.private_key,
-            password=None,
-            backend=soft_webauthn.default_backend(),
-        )
-        return passkey
-
 
 class Api(MeatieClient):
-    """Some useful ubank API endpoints.
+    """A ubank API client.
 
-    Meatie translates these annotated method signatures into code that performs
-    the underlying HTTP requests model validation.
+    Provides methods for interacting with the following resources:
+
+    - customer details
+    - accounts
+    - transactions
+    - cards
+    - contacts
+    - devices (passkeys)
+
+    This is a `MeatieClient`. It has a bunch of methods... with nothing in them.
+    Meatie generates code for calling endpoints automatically! It does this by inspecting
+    type signatures. And using [descriptors](https://docs.python.org/3/howto/descriptor.html).
+
+    I've heard of decorators, but not descriptors. Sounds powerful. Worth looking into.
     """
 
     def __init__(self, passkey: Passkey) -> None:
@@ -430,7 +478,24 @@ class Api(MeatieClient):
 
 
 class Client(httpx.Client):
-    """ubank API client based on httpx.Client.
+    """httpx.Client initialised with a passkey to make authenticated requests to ubank.
+
+    Initialising the class performs webauthn authentication using the supplied passkey.
+    ubank is the Relying Party (RP). The supplied passkey signs an assertion using
+    a challenge from RP - SoftWebauthnDevice.get().  The assertion is sent back
+    to RP for verification.
+
+    The result from this call is transformed and sent back to ubank.
+
+    completes webauthn flow
+
+        super().__init__(
+            headers=client.headers,
+            cookies=client.cookies,
+            base_url="https://api.ubank.com.au/app/v1/",
+        )
+
+    Initialised with a passkey.  Client(pass)
 
     Requests are authenticated using the supplied passkey.
 
@@ -450,11 +515,9 @@ class Client(httpx.Client):
     """
 
     def __init__(self, passkey: Passkey) -> None:
-        """Initialises ubank session using passkey to authenticate.
-
-        :param passkey: `Passkey` registered with ubank
-        """
+        """Initialise an authenticated client with a passkey s ubank session using passkey to authenticate."""
         with httpx.Client(
+            # Headers that are present from the get go. Not all
             headers={
                 **base_headers,
                 "x-hardware-id": passkey.hardware_id,
@@ -466,7 +529,7 @@ class Client(httpx.Client):
             # be incremented by *any* positive value. By using Unix time, we don't
             # have to muck about keeping track of counter values in the passkey file.
             # https://www.w3.org/TR/webauthn-2/#signature-counter
-            passkey.sign_count = int(time.time())
+            passkey.soft_webauthn_device.sign_count = int(time.time())
 
             # Initiate authentication flow to receive challenge from relying party
             # (ubank).
@@ -486,7 +549,9 @@ class Client(httpx.Client):
                 response.json()["publicKeyCredentialRequestOptions"]
             )
             # Make assertion object suitable for ubank by making values JSON-serializable.
-            assertion = prepare_assertion(passkey.get(options, origin))
+            assertion = prepare_assertion(
+                passkey.soft_webauthn_device.get(options, origin)
+            )
             # Complete authentication flow by sending signed assertion to relying
             # party.
             try:
@@ -546,9 +611,23 @@ class Client(httpx.Client):
         super().close()
 
     def __exit__(self, exc_type, exc_value, traceback) -> None:
-        """Kills ubank session before exiting the context."""
+        """Handle use in context manager Kills ubank session before exiting the context."""
         self._delete_session()
         super().__exit__(exc_type, exc_value, traceback)
+
+
+def derive_key(password: str, salt=b"") -> bytes:
+    """Returns key derived from from password.
+
+    https://cryptography.io/en/latest/fernet/#using-passwords-with-fernet
+    """
+    kdf = PBKDF2HMAC(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=salt,
+        iterations=1_000_000,
+    )
+    return urlsafe_b64encode(kdf.derive(password.encode("utf-8")))
 
 
 def int8array_to_bytes(array: list[int]) -> bytes:
@@ -631,13 +710,9 @@ def prepare_assertion(assertion: dict) -> dict:
     }
 
 
-def add_passkey(
-    username: str,
-    password: str,
-    passkey_name: str,
-) -> Passkey:
-    """Registers new passkey with ubank after prompting for security code sent to
-    mobile.
+def add_passkey(username: str, password: str, passkey_name: str) -> Passkey:
+    """Returns new passkey registered with ubank after prompting for security code
+    sent to mobile.
 
     This function returns sensitive key material. You are responsible for securing
     it!
@@ -647,10 +722,10 @@ def add_passkey(
     :param passkey_name: Set passkey name (shown in ubank app)
     :return: New passkey
     """
-    # Initialise a software-based passkey. We also store various ubank IDs and metadata
-    # in this object's attributes.
-    passkey = Passkey(passkey_name)
+    # Initialise a software-based passkey.
+    passkey = Passkey(name=passkey_name)
 
+    # Use a Client to persist cookies and setting default headers.
     with httpx.Client(
         headers={
             **base_headers,
@@ -735,7 +810,9 @@ def add_passkey(
             response.json()["publicKeyCredentialCreationOptions"]
         )
         # Make attestation object suitable for ubank by making values JSON-serializable.
-        attestation = prepare_attestation(passkey.create(options, origin))
+        attestation = prepare_attestation(
+            passkey.soft_webauthn_device.create(options, origin)
+        )
 
         # Send public key credential attestation to relying party (ubank).
         try:
@@ -771,10 +848,48 @@ def add_passkey(
         return passkey
 
 
+def to_dict(device: UserVerifiedDevice) -> dict:
+    """Converts SoftWebauthnDevice instance to dict with serialized private key."""
+    serialized_private_key = (
+        device.private_key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption(),
+        )
+        if device.private_key
+        else b""
+    )
+    return {
+        "credential_id": device.credential_id,
+        "serialized_private_key": serialized_private_key,
+        "aaguid": device.aaguid,
+        "rp_id": device.rp_id,
+        "user_handle": device.user_handle,
+        "sign_count": device.sign_count,
+    }
+
+
+def from_dict(device_dict: dict) -> UserVerifiedDevice:
+    """Returns device instantiated from dict."""
+    device = UserVerifiedDevice()
+    device.credential_id = device_dict["credential_id"]
+    device.private_key = serialization.load_pem_private_key(
+        device_dict["serialized_private_key"],
+        password=None,
+        backend=default_backend(),
+    )
+    device.aaguid = device_dict["aaguid"]
+    device.rp_id = device_dict["rp_id"]
+    device.user_handle = device_dict["user_handle"]
+    device.sign_count = device_dict["sign_count"]
+    return device
+
+
 def cli():
     parser = argparse.ArgumentParser(
-        description="Registers new passkey with ubank. "
-        "You will be asked for your ubank password and secret code interactively.",
+        description="Returns a new passkey registered with ubank.",
+        epilog="You will be asked for your ubank password and secret code interactively. "
+        "The passkey is encrypted with your ubank password.",
     )
     parser.add_argument("username", help="ubank username")
     parser.add_argument(
@@ -782,7 +897,7 @@ def cli():
         "--output",
         default="-",
         type=argparse.FileType(mode="wb"),
-        help="writes plaintext passkey to file (default: write to stdout)",
+        help="writes encrypted passkey to file (default: write to stdout)",
         dest="file",
     )
     parser.add_argument(
@@ -798,12 +913,13 @@ def cli():
     if args.verbose:
         # Displays basic httpx request information.
         logging.basicConfig(level=logging.INFO)
-    # Write passkey to file.
-    add_passkey(
+    password = getpass("Enter ubank password: ")
+    passkey = add_passkey(
         args.username,
-        password=getpass("Enter ubank password: "),
+        password=password,
         passkey_name=args.passkey_name,
-    ).dump(args.file)
+    )
+    passkey.dump(args.file, password=password)
 
 
 if __name__ == "__main__":
