@@ -27,7 +27,7 @@ jobs:
           # Run tests.
           curl -LsSf https://astral.sh/uv/install.sh | sh
           uv python pin ${{ matrix.python-version }}
-          uv run pytest -v -k 'not test_ubank_client'
+          uv run -m pytest -v
   publish:
     needs: test
     # Only publish if releasing.
