@@ -210,39 +210,7 @@ class CardsResponse(BaseModel):
 
 
 class Passkey(soft_webauthn.SoftWebauthnDevice):
-    """Extends SoftWebauthnDevice with ubank-specific attributes and serialization
-    methods."""
-
-    def __init__(self, name: str, app_version="11.103.3", device_name="iPhone17-3"):
-        """Initialise your passkey with a name.
-
-        :param name: Set passkey name (shown in ubank app)
-        :param app_version: Set ubank application version identifier. See versions here:
-            https://apps.apple.com/au/app/id1449543099.
-        :param device_name: Set device identifier. See "Hardware strings" row in this
-            table: https://en.wikipedia.org/wiki/List_of_iPhone_models. Replace comma
-            with hyphen.
-        """
-        super().__init__()
-        self.name = name
-        # Generate a fresh hardware ID.
-        self.hardware_id = str(uuid.uuid4())
-        # Start with an empty device ID. ubank will assign one later.
-        self.device_id = ""
-        # Build device meta string from app version and device name.
-        self.device_meta = json.dumps(
-            {
-                "appVersion": app_version,
-                "binaryVersion": app_version,
-                "deviceName": device_name,
-                "environment": "production",
-                "instance": "live",
-                "native": True,
-                "platform": "ios",
-            }
-        )
-        # Start with empty username, it will be assigned by ubank later.
-        self.username = ""
+    """Extends SoftWebauthnDevice signing methods with UV bit flag set."""
 
     # TODO: Remove if custom flag support merged https://github.com/bodik/soft-webauthn/pull/15
     def create(self, options, origin):
@@ -353,32 +321,6 @@ class Passkey(soft_webauthn.SoftWebauthnDevice):
             },
             "type": "public-key",
         }
-
-    # TODO: Replace if serialization PR merged https://github.com/bodik/soft-webauthn/pull/11
-    def dump(self, file: IO[bytes]):
-        """Serializes passkey to `file`."""
-        passkey_dict = {name: value for name, value in vars(self).items()}
-        passkey_dict["private_key"] = self.private_key.private_bytes(
-            serialization.Encoding.PEM,
-            serialization.PrivateFormat.PKCS8,
-            serialization.NoEncryption(),
-        )
-        file.write(soft_webauthn.cbor.dump_dict(passkey_dict))
-
-    # TODO: Replace if serialization PR merged https://github.com/bodik/soft-webauthn/pull/11
-    @classmethod
-    def load(cls, file: IO[bytes]):
-        """Deserializes passkey from `file`."""
-        passkey_dict = soft_webauthn.cbor.decode(file.read())
-        passkey = Passkey(passkey_dict["name"])
-        for name, value in passkey_dict.items():
-            setattr(passkey, name, value)
-        passkey.private_key = serialization.load_pem_private_key(
-            passkey.private_key,
-            password=None,
-            backend=soft_webauthn.default_backend(),
-        )
-        return passkey
 
 
 class Api(MeatieClient):
@@ -635,9 +577,11 @@ def add_passkey(
     username: str,
     password: str,
     passkey_name: str,
+    app_version="11.103.3",
+    device_name="iPhone17-3",
 ) -> Passkey:
-    """Registers new passkey with ubank after prompting for security code sent to
-    mobile.
+    """Returns new passkey registered with ubank after prompting for security code
+    sent to mobile.
 
     This function returns sensitive key material. You are responsible for securing
     it!
@@ -645,11 +589,35 @@ def add_passkey(
     :param username: ubank username
     :param password: ubank password
     :param passkey_name: Set passkey name (shown in ubank app)
+    :param app_version: Set ubank application version identifier. See versions here:
+        https://apps.apple.com/au/app/id1449543099.
+    :param device_name: Set device identifier. See "Hardware strings" row in this
+        table: https://en.wikipedia.org/wiki/List_of_iPhone_models. Replace comma
+        with hyphen.
     :return: New passkey
     """
-    # Initialise a software-based passkey. We also store various ubank IDs and metadata
-    # in this object's attributes.
-    passkey = Passkey(passkey_name)
+    # Initialise a software-based passkey and store a bunch of ubank-specific IDs
+    # and metadata the object's attributes.
+    passkey = Passkey()
+    passkey.name = passkey_name
+    # Generate a fresh hardware ID.
+    passkey.hardware_id = str(uuid.uuid4())
+    # Start with an empty device ID. ubank will assign one later.
+    passkey.device_id = ""
+    # Build device meta string from app version and device name.
+    passkey.device_meta = json.dumps(
+        {
+            "appVersion": app_version,
+            "binaryVersion": app_version,
+            "deviceName": device_name,
+            "environment": "production",
+            "instance": "live",
+            "native": True,
+            "platform": "ios",
+        }
+    )
+    # Start with empty username, it will be assigned by ubank later.
+    passkey.username = ""
 
     with httpx.Client(
         headers={
@@ -773,8 +741,9 @@ def add_passkey(
 
 def cli():
     parser = argparse.ArgumentParser(
-        description="Registers new passkey with ubank. "
-        "You will be asked for your ubank password and secret code interactively.",
+        description="Returns a new passkey registered with ubank.",
+        epilog="You will be asked for your ubank password and secret code interactively. "
+        "The passkey is encrypted with your ubank password.",
     )
     parser.add_argument("username", help="ubank username")
     parser.add_argument(
@@ -782,7 +751,7 @@ def cli():
         "--output",
         default="-",
         type=argparse.FileType(mode="wb"),
-        help="writes plaintext passkey to file (default: write to stdout)",
+        help="writes encrypted passkey to file (default: write to stdout)",
         dest="file",
     )
     parser.add_argument(
@@ -798,12 +767,14 @@ def cli():
     if args.verbose:
         # Displays basic httpx request information.
         logging.basicConfig(level=logging.INFO)
-    # Write passkey to file.
-    add_passkey(
+    password = getpass("Enter ubank password: ")
+    passkey = add_passkey(
         args.username,
-        password=getpass("Enter ubank password: "),
+        password=password,
         passkey_name=args.passkey_name,
-    ).dump(args.file)
+    )
+    # Encrypt serialized passkey with ubank password.
+    args.file.write(passkey.to_bytes(password=password))
 
 
 if __name__ == "__main__":

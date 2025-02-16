@@ -19,8 +19,8 @@ Enter ubank password:
 Enter security code sent to 04xxxxx789: 123456
 ```
 
-The above writes a new passkey to `passkey.cbor`.
-You'll be prompted for your ubank username and SMS security code.
+This saves the passkey to `passkey.cbor`, encrypted with your ubank password.
+You'll be prompted for your ubank username and SMS security code interactively.
 
 > [!CAUTION]
 > Your passkey grants access to your bank account.
@@ -39,13 +39,15 @@ Create a script named `balances.py`:
 # ubank = { git = "https://github.com/eidorb/ubank" }
 # ///
 
+from getpass import getpass
+
 from ubank import Api, Passkey
 
 # Load passkey from file.
 with open("passkey.cbor", "rb") as f:
-    passkey = Passkey.load(f)
+    passkey = Passkey.from_bytes(f.read(), password=getpass("Enter ubank password: "))
 
-# Authenticate to ubank with passkey.
+# Print account balances.
 with Api(passkey) as api:
     for account in api.get_accounts().linkedBanks[0].accounts:
         print(
@@ -78,34 +80,36 @@ Savings account (SAVINGS): 1577.17 AUD
 
 ```console
 $ uvx ubank --help
-usage: ubank.py [-h] [-o FILE] [-n PASSKEY_NAME] [-v] username
+usage: ubank [-h] [-o FILE] [-n PASSKEY_NAME] [-v] username
 
-Registers new passkey with ubank. You will be asked for your ubank password and secret code interactively.
+Returns a new passkey registered with ubank.
 
 positional arguments:
   username              ubank username
 
 options:
   -h, --help            show this help message and exit
-  -o FILE, --output FILE
-                        writes plaintext passkey to file (default: write to stdout)
-  -n PASSKEY_NAME, --passkey-name PASSKEY_NAME
+  -o, --output FILE     writes encrypted passkey to file (default: write to stdout)
+  -n, --passkey-name PASSKEY_NAME
                         sets passkey name (default: ubank.py)
   -v, --verbose         displays httpx INFO logs
+
+You will be asked for your ubank password and secret code interactively. The passkey is encrypted with your ubank password.
 ```
 
 
 ## ubank API
 
-`ubank.Api` provides a number of methods for accessing ubank's API:
+The `ubank.Api` class provides a number of methods for accessing ubank's API:
 
 ```python
 from datetime import date
+from getpass import getpass
 
 from ubank import Api, Passkey, TransactionsSearchBody
 
 with open("passkey.cbor", "rb") as f:
-    passkey = Passkey.load(f)
+    passkey = Passkey.from_bytes(f.read(), password=getpass("Enter ubank password: "))
 
 with Api(passkey) as api:
     api.post_accounts_transactions_search(
@@ -118,6 +122,7 @@ with Api(passkey) as api:
         customerId=api.get_customer_details().customerId,
     )
     api.get_cards()
+    api.get_devices(deviceUuid=passkey.device_id)
     api.get_contacts()
 ```
 
@@ -185,6 +190,9 @@ which builds and publishes the package to [PyPI](https://pypi.org/project/ubank/
 
 
 ## Changelog
+
+- Encrypt passkey with ubank username.
+
 
 ### 2.0.0
 
