@@ -211,11 +211,10 @@ class Client(httpx.Client):
         ...
     ```
 
-    `base_url` is set to https://api.ubank.com.au/, so only the API path is required
-    when making requests:
+    `base_url` is set to https://api.ubank.com.au/app/v1/. Use relative paths in requests:
 
     ```python
-    client.get("/app/v1/accounts/summary")
+    client.get("accounts/summary")
     ```
     """
 
@@ -295,14 +294,14 @@ class Client(httpx.Client):
         super().__init__(
             headers=client.headers,
             cookies=client.cookies,
-            base_url="https://api.ubank.com.au/",
+            base_url="https://api.ubank.com.au/app/v1/",
         )
 
     def _delete_session(self) -> None:
         """Kills ubank session."""
         self.request(
             "DELETE",
-            "/app/v1/sessions",
+            "sessions",
             json={
                 "accessToken": self.access_token,
                 "refreshToken": self.refresh_token,

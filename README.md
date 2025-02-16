@@ -69,25 +69,25 @@ Savings account (SAVINGS): 1577.17 AUD
 
 `ubank.Client` is an [`httpx.Client`](https://www.python-httpx.org/advanced/clients/)
 with a familiar requests-style interface.
-Its `base_url` is set to `https://api.ubank.com.au/`, so only the path is required when making API requests.
+Its `base_url` is set to `https://api.ubank.com.au/app/v1/`, so use a relative path when making requests.
 
 Here are some API endpoints to try (can you find more?):
 
 ```python
 with Client(passkey) as client:
-    print(client.get("/app/v1/accounts").json())
-    print(client.get("/app/v1/accounts/summary").json())
-    print(client.get("/app/v1/achievements").json())
-    print(client.get("/app/v1/campaigns").json())
-    print(client.get("/app/v1/cards").json())
-    print(client.get("/app/v1/contacts").json())
-    print(client.get("/app/v1/customer-details").json())
-    print(client.get("/app/v1/insights").json())
-    print(client.get("/app/v1/insights/interest").json())
-    print(client.get("/app/v1/products").json())
-    print(client.get("/app/v1/promotions").json())
-    print(client.get("/app/v1/savings-goals").json())
-    print(client.get("/app/v1/tfn").json())
+    print(client.get("accounts").json())
+    print(client.get("accounts/summary").json())
+    print(client.get("achievements").json())
+    print(client.get("campaigns").json())
+    print(client.get("cards").json())
+    print(client.get("contacts").json())
+    print(client.get("customer-details").json())
+    print(client.get("insights").json())
+    print(client.get("insights/interest").json())
+    print(client.get("products").json())
+    print(client.get("promotions").json())
+    print(client.get("savings-goals").json())
+    print(client.get("tfn").json())
 ```
 
 `ubank.Client` is intended to be used as a context manager.

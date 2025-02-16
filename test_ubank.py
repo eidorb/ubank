@@ -190,6 +190,8 @@ def test_ubank_client():
     # Authenticate to ubank with passkey.
     with Client(passkey) as client:
         assert (
-            client.get("/app/v1/accounts").json()["linkedBanks"][0]["shortBankName"]
-            == "ubank"
+            client.get("accounts").json()["linkedBanks"][0]["accounts"][0]["balance"][
+                "currency"
+            ]
+            == "AUD"
         )
