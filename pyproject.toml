@@ -9,6 +9,7 @@ authors = [{name = "eidorb"}]
 dependencies = [
     "httpx>=0.28.1",
     "meatie>=0.1.20",
+    "pydantic>=2.10.6",
     "soft-webauthn>=0.1.4",
 ]
 
