@@ -26,8 +26,7 @@ jobs:
       - run: |
           # Run tests.
           curl -LsSf https://astral.sh/uv/install.sh | sh
-          uv python pin ${{ matrix.python-version }}
-          uv run -m pytest -v
+          uv run --python ${{ matrix.python-version }} -m pytest -v
   publish:
     needs: test
     # Only publish if releasing.
