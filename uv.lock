@@ -407,15 +407,11 @@ wheels = [
 
 [[package]]
 name = "soft-webauthn"
-version = "0.1.4"
-source = { registry = "https://pypi.org/simple" }
+version = "0.1.5"
+source = { git = "https://github.com/eidorb/soft-webauthn?branch=YSaxon-serialization#6f24dfc0689a90ece3b8f2a52c55f20a1d9437fd" }
 dependencies = [
     { name = "cryptography" },
     { name = "fido2" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/61/31/65cf69054dced6c143ca8631ce3075cdbb9d096739b8a5254467baa38ec8/soft-webauthn-0.1.4.tar.gz", hash = "sha256:e96513342e69bbfde5a60adcb03ab0d562d70d5d2e20ee7203fcfbdf4f1b06d0", size = 3467 }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/e2/5b/cd4b1738509cdb9382d632c503be0b242d589e4dfe39dcc75d74fcf1618c/soft_webauthn-0.1.4-py3-none-any.whl", hash = "sha256:eacb98e406b0bc170455f9fd00977400d6129e7c557f872cf118e9431d1cb9e1", size = 4389 },
 ]
 
 [[package]]
@@ -486,7 +482,7 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "meatie", specifier = ">=0.1.20" },
     { name = "pydantic", specifier = ">=2.10.6" },
-    { name = "soft-webauthn", specifier = ">=0.1.4" },
+    { name = "soft-webauthn", git = "https://github.com/eidorb/soft-webauthn?branch=YSaxon-serialization" },
 ]
 
 [package.metadata.requires-dev]

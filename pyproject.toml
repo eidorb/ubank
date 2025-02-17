@@ -25,5 +25,8 @@ build-backend = "hatchling.build"
 [tool.hatch.version]
 path = "ubank.py"
 
+[tool.uv.sources]
+soft-webauthn = { git = "https://github.com/eidorb/soft-webauthn", branch = "YSaxon-serialization" }
+
 [project.scripts]
 ubank = "ubank:cli"
