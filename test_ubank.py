@@ -152,6 +152,7 @@ def test_add_passkey_bad_username():
     try:
         add_passkey("badusername", "password", "")
     except HTTPStatusError as e:
+        assert e.__notes__
         assert "Username invalid" in e.__notes__[0]
 
 

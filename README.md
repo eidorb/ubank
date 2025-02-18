@@ -1,25 +1,23 @@
 # ubank
 
-Access [ubank](https://www.ubank.com.au)'s API with Python.
+Access [ubank](https://www.ubank.com.au)'s API using Python.
 
 
 ## Getting started
 
-Install [uv](https://docs.astral.sh/uv/):
+Install ubank using pip:
 
-```shell
-curl -LsSf https://astral.sh/uv/install.sh | sh
-```
+    pip install ubank
 
-Register a new passkey with ubank:
+The ubank package provides a script to register a new passkey with ubank:
 
 ```console
-$ uvx --from git+https://github.com/eidorb/ubank ubank name@domain.com --output passkey.txt
+$ ubank name@domain.com --output passkey.txt
 Enter ubank password:
 Enter security code sent to 04xxxxx789: 123456
 ```
 
-This saves the passkey to `passkey.txt`, encrypted with your ubank password.
+This saves a new passkey to `passkey.txt` (encrypted with your ubank password).
 You'll be prompted for your ubank username and SMS security code interactively.
 
 > [!CAUTION]
@@ -29,16 +27,6 @@ You'll be prompted for your ubank username and SMS security code interactively.
 Create a script named `balances.py`:
 
 ```python
-# /// script
-# requires-python = ">=3.9"
-# dependencies = [
-#     "ubank",
-# ]
-#
-# [tool.uv.sources]
-# ubank = { git = "https://github.com/eidorb/ubank" }
-# ///
-
 from getpass import getpass
 
 from ubank import Api, Passkey
@@ -55,10 +43,10 @@ with Api(passkey) as api:
         )
 ```
 
-Run it with uv:
+Run the script to print your account balances:
 
 ```console
-$ uv run balances.py
+$ python balances.py
 Enter ubank password:
 Spend account (TRANSACTION): 765.48 AUD
 Savings account (SAVINGS): 1577.17 AUD
@@ -69,18 +57,21 @@ Savings account (SAVINGS): 1577.17 AUD
 
 - [Getting started](#getting-started)
 - [Contents](#contents)
-- [CLI help](#cli-help)
+- [ubank CLI](#ubank-cli)
 - [ubank API](#ubank-api)
+- [Example web application](#example-web-application)
 - [How to set up a development environment](#how-to-set-up-a-development-environment)
 - [How to test](#how-to-test)
 - [How to publish a new release](#how-to-publish-a-new-release)
 - [Changelog](#changelog)
 
 
-## CLI help
+## ubank CLI
+
+The `ubank` module provides a CLI for registering a new passkey:
 
 ```console
-$ uvx ubank --help
+$ ubank --help
 usage: ubank [-h] [-o FILE] [-n PASSKEY_NAME] [-v] username
 
 Returns a new passkey registered with ubank.
@@ -128,14 +119,32 @@ with Api(passkey) as api:
 ```
 
 
+## Example web application
+
+`notebook.py` is a [marimo](https://marimo.io) notebook that looks like this [this](https://raw.githack.com/eidorb/ubank/refs/heads/master/notebook.html).
+It demonstrates usage of the API client class to explore ubank's API.
+
+Open `notebook.py` in the marimo editor:
+
+    uv run marimo edit notebook.py
+
+Run the notebook as a web application:
+
+    uv run marimo edit notebook.py
+
+![](notebook.gif)
+
+
 ## How to set up a development environment
+
+Install [uv](https://docs.astral.sh/uv/):
+
+    curl -LsSf https://astral.sh/uv/install.sh | sh
 
 Clone this repository:
 
-```shell
-git clone git@github.com:eidorb/ubank.git
-cd ubank
-```
+    git clone git@github.com:eidorb/ubank.git
+    cd ubank
 
 uv ensures Python dependencies compatible with those defined in [`pyproject.toml`](pyproject.toml)
 are automatically installed:
@@ -153,9 +162,7 @@ Installed 17 packages in 22ms
 
 Run all tests:
 
-```shell
-uv run -m pytest -v
-```
+    uv run -m pytest -v
 
 
 ## How to publish a new release
@@ -182,9 +189,7 @@ To github.com:eidorb/ubank.git
 
 Open new release form for tag:
 
-```shell
-open "https://github.com/eidorb/ubank/releases/new?tag=v$(uvx hatch version)"
-```
+    open "https://github.com/eidorb/ubank/releases/new?tag=v$(uvx hatch version)"
 
 Publishing a release triggers this [workflow](.github/workflows/workflow.yml)
 which builds and publishes the package to [PyPI](https://pypi.org/project/ubank/).
@@ -193,6 +198,8 @@ which builds and publishes the package to [PyPI](https://pypi.org/project/ubank/
 ## Changelog
 
 - Passkey encrypted with ubank password.
+- Add API client `Api`.
+- Add marimo notebook.
 
 
 ### 2.0.0
