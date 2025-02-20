@@ -515,7 +515,11 @@ class Client(httpx.Client):
     """
 
     def __init__(self, passkey: Passkey) -> None:
-        """Initialise an authenticated client with a passkey s ubank session using passkey to authenticate."""
+        """Initialises ubank session using passkey to authenticate.
+
+        Caught HTTPStatusErrors are re-raised with a note containing the API's error
+        response text. This requires Python >= 3.11.
+        """
         with httpx.Client(
             # Headers that are present from the get go. Not all
             headers={

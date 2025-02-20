@@ -3,6 +3,7 @@ from datetime import date
 
 import pytest
 from cryptography.hazmat.primitives import serialization
+from httpx import HTTPStatusError
 
 from ubank import (
     Api,
@@ -10,6 +11,7 @@ from ubank import (
     TransactionsSearchBody,
     UserVerifiedDevice,
     __version__,
+    add_passkey,
     int8array_to_bytes,
     parse_public_key_credential_creation_options,
     parse_public_key_credential_request_options,
@@ -143,6 +145,14 @@ def test_passkey_serialization(tmp_path):
     with (tmp_path / "passkey.txt").open("rb") as f:
         deserialized_passkey = Passkey.load(f, password="")
     assert type(deserialized_passkey.soft_webauthn_device) is UserVerifiedDevice
+
+
+def test_add_passkey_bad_username():
+    """HTTPStatusErrors raised by add_passkey() should contain notes with API error text."""
+    try:
+        add_passkey("badusername", "password", "")
+    except HTTPStatusError as e:
+        assert "Username invalid" in e.__notes__[0]
 
 
 def test_api():

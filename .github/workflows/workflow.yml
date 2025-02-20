@@ -24,8 +24,6 @@ jobs:
           # Test
           curl -LsSf https://astral.sh/uv/install.sh | sh
           uvx ruff format --diff
-          uv run --python 3.9 -m pytest -v
-          uv run --python 3.10 -m pytest -v
           uv run --python 3.11 -m pytest -v
           uv run --python 3.12 -m pytest -v
           uv run --python 3.13 -m pytest -v
