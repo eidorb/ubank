@@ -32,7 +32,7 @@ from meatie_httpx import Client as MeatieClient
 from pydantic import BaseModel, Field
 from soft_webauthn import SoftWebauthnDevice
 
-__version__ = "2.0.0"
+__version__ = "2.1.0"
 
 
 # Unchanging headers in every request.

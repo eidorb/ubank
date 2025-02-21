@@ -197,9 +197,11 @@ which builds and publishes the package to [PyPI](https://pypi.org/project/ubank/
 
 ## Changelog
 
-- Passkey encrypted with ubank password.
-- Add API client `Api`.
-- Add marimo notebook.
+### 2.1.0
+
+- Passkey encrypted with ubank password
+- Add API client `Api`
+- Add marimo notebook
 
 
 ### 2.0.0
