@@ -26,5 +26,14 @@ build-backend = "hatchling.build"
 [tool.hatch.version]
 path = "ubank.py"
 
+[tool.hatch.build.targets.sdist]
+exclude = ["notebook.gif"]
+
+[tool.hatch.build.targets.wheel]
+include = [
+    "ubank.py",
+    "soft_webauthn_patched.py",
+]
+
 [project.scripts]
 ubank = "ubank:cli"
