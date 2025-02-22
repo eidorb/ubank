@@ -2,14 +2,13 @@ from base64 import urlsafe_b64encode
 from datetime import date
 
 import pytest
-from cryptography.hazmat.primitives import serialization
 from httpx import HTTPStatusError
 
 from ubank import (
     Api,
     Passkey,
+    SoftWebauthnDevice,
     TransactionsSearchBody,
-    UserVerifiedDevice,
     __version__,
     add_passkey,
     int8array_to_bytes,
@@ -144,7 +143,7 @@ def test_passkey_serialization(tmp_path):
         passkey.dump(f, password="")
     with (tmp_path / "passkey.txt").open("rb") as f:
         deserialized_passkey = Passkey.load(f, password="")
-    assert type(deserialized_passkey.soft_webauthn_device) is UserVerifiedDevice
+    assert type(deserialized_passkey.soft_webauthn_device) is SoftWebauthnDevice
 
 
 def test_add_passkey_bad_username():

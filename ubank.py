@@ -21,7 +21,6 @@ from getpass import getpass
 from typing import IO, AnyStr, Optional
 
 import httpx
-import soft_webauthn
 from cryptography.fernet import Fernet
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes, serialization
@@ -30,7 +29,8 @@ from fido2 import cbor
 from meatie import endpoint
 from meatie_httpx import Client as MeatieClient
 from pydantic import BaseModel, Field
-from soft_webauthn import SoftWebauthnDevice
+
+from soft_webauthn_patched import SoftWebauthnDevice
 
 __version__ = "2.1.0"
 
@@ -257,7 +257,7 @@ class Passkey:
         self.device_id = device_id
         self.device_meta = device_meta
         self.username = username
-        self.soft_webauthn_device = UserVerifiedDevice()
+        self.soft_webauthn_device = SoftWebauthnDevice()
 
     def dump(self, file: IO[bytes], password: str = ""):
         """Serializes passkey to file, encrypted with a password.
@@ -303,118 +303,6 @@ class Passkey:
             deserialized_passkey["soft_webauthn_device_dict"]
         )
         return passkey
-
-
-class UserVerifiedDevice(SoftWebauthnDevice):
-    """Software webauthn device with UV bit flag ALWAYS set."""
-
-    def create(self, options, origin):
-        """IDENTICAL to super().create(), except User Verification flag set."""
-        if {"alg": -7, "type": "public-key"} not in options["publicKey"][
-            "pubKeyCredParams"
-        ]:
-            raise ValueError(
-                "Requested pubKeyCredParams does not contain supported type"
-            )
-
-        if ("attestation" in options["publicKey"]) and (
-            options["publicKey"]["attestation"] not in [None, "none"]
-        ):
-            raise ValueError("Only none attestation supported")
-
-        # prepare new key
-        self.cred_init(
-            options["publicKey"]["rp"]["id"], options["publicKey"]["user"]["id"]
-        )
-
-        # generate credential response
-        client_data = {
-            "type": "webauthn.create",
-            "challenge": soft_webauthn.urlsafe_b64encode(
-                options["publicKey"]["challenge"]
-            )
-            .decode("ascii")
-            .rstrip("="),
-            "origin": origin,
-        }
-
-        rp_id_hash = soft_webauthn.sha256(self.rp_id.encode("ascii"))
-        # Set Bit 2, User Verification (UV) also.
-        # https://developer.mozilla.org/en-US/docs/Web/API/Web_Authentication_API/Authenticator_data
-        flags = b"\x45"  # attested_data + user_present + user_verified
-        sign_count = soft_webauthn.pack(">I", self.sign_count)
-        credential_id_length = soft_webauthn.pack(">H", len(self.credential_id))
-        cose_key = soft_webauthn.cbor.encode(
-            soft_webauthn.ES256.from_cryptography_key(self.private_key.public_key())
-        )
-        attestation_object = {
-            "authData": rp_id_hash
-            + flags
-            + sign_count
-            + self.aaguid
-            + credential_id_length
-            + self.credential_id
-            + cose_key,
-            "fmt": "none",
-            "attStmt": {},
-        }
-
-        return {
-            "id": soft_webauthn.urlsafe_b64encode(self.credential_id),
-            "rawId": self.credential_id,
-            "response": {
-                "clientDataJSON": json.dumps(client_data).encode("utf-8"),
-                "attestationObject": soft_webauthn.cbor.encode(attestation_object),
-            },
-            "type": "public-key",
-        }
-
-    def get(self, options, origin):
-        """IDENTICAL to super().create(), except User Verification flag set."""
-
-        if self.rp_id != options["publicKey"]["rpId"]:
-            raise ValueError("Requested rpID does not match current credential")
-
-        self.sign_count += 1
-
-        # prepare signature
-        client_data = json.dumps(
-            {
-                "type": "webauthn.get",
-                "challenge": soft_webauthn.urlsafe_b64encode(
-                    options["publicKey"]["challenge"]
-                )
-                .decode("ascii")
-                .rstrip("="),
-                "origin": origin,
-            }
-        ).encode("utf-8")
-        client_data_hash = soft_webauthn.sha256(client_data)
-
-        rp_id_hash = soft_webauthn.sha256(self.rp_id.encode("ascii"))
-        # Set Bit 2, User Verification (UV) also.
-        # https://developer.mozilla.org/en-US/docs/Web/API/Web_Authentication_API/Authenticator_data
-        flags = b"\x05"
-        sign_count = soft_webauthn.pack(">I", self.sign_count)
-        authenticator_data = rp_id_hash + flags + sign_count
-
-        signature = self.private_key.sign(
-            authenticator_data + client_data_hash,
-            soft_webauthn.ec.ECDSA(soft_webauthn.hashes.SHA256()),
-        )
-
-        # generate assertion
-        return {
-            "id": soft_webauthn.urlsafe_b64encode(self.credential_id),
-            "rawId": self.credential_id,
-            "response": {
-                "authenticatorData": authenticator_data,
-                "clientDataJSON": client_data,
-                "signature": signature,
-                "userHandle": self.user_handle,
-            },
-            "type": "public-key",
-        }
 
 
 class Api(MeatieClient):
@@ -852,7 +740,7 @@ def add_passkey(username: str, password: str, passkey_name: str) -> Passkey:
         return passkey
 
 
-def to_dict(device: UserVerifiedDevice) -> dict:
+def to_dict(device: SoftWebauthnDevice) -> dict:
     """Converts SoftWebauthnDevice instance to dict with serialized private key."""
     serialized_private_key = (
         device.private_key.private_bytes(
@@ -873,9 +761,9 @@ def to_dict(device: UserVerifiedDevice) -> dict:
     }
 
 
-def from_dict(device_dict: dict) -> UserVerifiedDevice:
+def from_dict(device_dict: dict) -> SoftWebauthnDevice:
     """Returns device instantiated from dict."""
-    device = UserVerifiedDevice()
+    device = SoftWebauthnDevice()
     device.credential_id = device_dict["credential_id"]
     device.private_key = serialization.load_pem_private_key(
         device_dict["serialized_private_key"],
