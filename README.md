@@ -29,15 +29,15 @@ Create a script named `balances.py`:
 ```python
 from getpass import getpass
 
-from ubank import Api, Passkey
+from ubank import Client, Passkey
 
 # Load passkey from file.
 with open("passkey.txt", "rb") as f:
     passkey = Passkey.load(f, password=getpass("Enter ubank password: "))
 
 # Print account balances.
-with Api(passkey) as api:
-    for account in api.get_accounts().linkedBanks[0].accounts:
+with Client(passkey) as client:
+    for account in client.get_linked_banks().linkedBanks[0].accounts:
         print(
             f"{account.label} ({account.type}): {account.balance.available} {account.balance.currency}"
         )
@@ -58,7 +58,7 @@ Savings account (SAVINGS): 1577.17 AUD
 - [Getting started](#getting-started)
 - [Contents](#contents)
 - [ubank CLI](#ubank-cli)
-- [ubank API](#ubank-api)
+- [ubank API client](#ubank-api-client)
 - [Example web application](#example-web-application)
 - [How to set up a development environment](#how-to-set-up-a-development-environment)
 - [How to test](#how-to-test)
@@ -90,32 +90,32 @@ You will be asked for your ubank password and secret code interactively. The pas
 ```
 
 
-## ubank API
+## ubank API client
 
-The `ubank.Api` class provides a number of methods for accessing ubank's API:
+Create an instance of `ubank.Client` to access ubank's API:
 
 ```python
 from datetime import date
 from getpass import getpass
 
-from ubank import Api, Passkey, TransactionsSearchBody
+from ubank import Client, Filter, Passkey
 
 with open("passkey.txt", "rb") as f:
     passkey = Passkey.load(f, password=getpass("Enter ubank password: "))
 
-with Api(passkey) as api:
-    api.post_accounts_transactions_search(
-        body=TransactionsSearchBody(fromDate=date(2025, 1, 1), toDate=date(2025, 2, 1))
+with Client(passkey) as client:
+    client.summarise_transactions(
+        body=Filter(fromDate=date(2025, 1, 1), toDate=date(2025, 2, 1))
     )
-    bank = api.get_accounts().linkedBanks[0]
-    api.get_account_transactions(
+    bank = client.get_linked_banks().linkedBanks[0]
+    client.search_account_transactions(
         account_id=bank.accounts[0].id,
         bank_id=bank.bankId,
-        customerId=api.get_customer_details().customerId,
+        customerId=client.get_customer_details().customerId,
     )
-    api.get_cards()
-    api.get_devices(deviceUuid=passkey.device_id)
-    api.get_contacts()
+    client.get_cards()
+    client.get_devices(deviceUuid=passkey.device_id)
+    client.get_contacts()
 ```
 
 

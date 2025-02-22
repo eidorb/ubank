@@ -2,9 +2,13 @@
 
 Run as a script to create a new passkey.
 
-The Api class is a ubank API client.
+There are many clients...:
+- Client is a ubank API client (this is what you use)
+- meatie_httpx.Client is Client's base class
+- HttpClient is a lower-level client that implements passkey authentication
+- httpx.Client is HttpClient's base class
 
-The Client class is lower level HTTP client that uses passkey authentication.
+Client relies upon an instance of HttpClient to make the actual HTTP requests.
 """
 
 from __future__ import annotations
@@ -21,13 +25,13 @@ from getpass import getpass
 from typing import IO, AnyStr, Optional
 
 import httpx
+import meatie_httpx
 from cryptography.fernet import Fernet
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from fido2 import cbor
 from meatie import endpoint
-from meatie_httpx import Client as MeatieClient
 from pydantic import BaseModel, Field
 
 from soft_webauthn_patched import SoftWebauthnDevice
@@ -60,7 +64,7 @@ class Address(BaseModel):
     suburb: Optional[str]
 
 
-class CustomerDetails(BaseModel):
+class Customer(BaseModel):
     addresses: list[Address]
     countriesOfCitizenship: list[str]
     customerId: Optional[str]
@@ -107,14 +111,14 @@ class Account(BaseModel):
     metadata: Optional[dict] = None
 
 
-class LinkedBank(BaseModel):
+class Bank(BaseModel):
     bankId: int
     shortBankName: str
     accounts: list[Account]
 
 
-class AccountsResponse(BaseModel):
-    linkedBanks: list[LinkedBank]
+class LinkedBanks(BaseModel):
+    linkedBanks: list[Bank]
 
 
 class Value(BaseModel):
@@ -140,10 +144,10 @@ class Transaction(BaseModel):
     accountId: str
     posted: datetime
     completed: datetime
-    value: Value
-    type: str
-    shortDescription: str
-    # Everything else seems optional.
+    # Shitty API, almost every field is potentially optional.
+    value: Optional[Value] = None
+    type: Optional[str] = None
+    shortDescription: Optional[str] = None
     narration: Optional[Value] = None
     balance: Optional[Value] = None
     debitOrCredit: Optional[str] = None
@@ -170,21 +174,21 @@ class Transaction(BaseModel):
     lwc: Optional[dict] = None
 
 
-class TransactionsSearchResponse(BaseModel):
+class TransactionsSummary(BaseModel):
     nextPageId: str
     totalCount: int
     totalAmount: str
     transactions: list[Transaction]
 
 
-class TransactionsSearchBody(BaseModel):
+class Filter(BaseModel):
     timezone: str = "Australia/Lord_Howe"
     fromDate: date
     toDate: date
     limit: int = 5
 
 
-class TransactionsResponse(BaseModel):
+class SearchResults(BaseModel):
     nextPageId: str
     transactions: list[Transaction]
     pendingTransactions: list
@@ -218,9 +222,13 @@ class Card(BaseModel):
     cardControls: list[dict]
 
 
-class CardsResponse(BaseModel):
+class Cards(BaseModel):
     cards: list[Card]
     cardReplacements: list
+
+
+class Contacts(BaseModel):
+    contacts: list[dict]
 
 
 class Passkey:
@@ -305,8 +313,8 @@ class Passkey:
         return passkey
 
 
-class Api(MeatieClient):
-    """A ubank API client.
+class Client(meatie_httpx.Client):
+    """A ubank Meatie client.
 
     Provides methods for interacting with the following resources:
 
@@ -315,29 +323,30 @@ class Api(MeatieClient):
     - transactions
     - cards
     - contacts
-    - devices (passkeys)
+    - authentication devices (includes passkeys)
 
-    This is a `MeatieClient`. It has a bunch of methods... with nothing in them.
-    Meatie generates code for calling endpoints automatically! It does this by inspecting
-    type signatures. And using [descriptors](https://docs.python.org/3/howto/descriptor.html).
+    This Meatie client has a bunch of methods defined... with nothing in them!
 
+    The Meatie library generates code for calling endpoints automatically. It does
+    this by inspecting type signatures (among many other things).
+
+    It relies heavily upon [descriptors](https://docs.python.org/3/howto/descriptor.html).
     I've heard of decorators, but not descriptors. Sounds powerful. Worth looking into.
     """
 
     def __init__(self, passkey: Passkey) -> None:
-        super().__init__(Client(passkey))
+        super().__init__(HttpClient(passkey))
 
     @endpoint("customer-details")
-    def get_customer_details(self) -> CustomerDetails: ...
+    def get_customer_details(self) -> Customer:
+        """Returns customer details."""
 
     @endpoint("accounts")
-    def get_accounts(self) -> AccountsResponse: ...
-
-    @endpoint("accounts/summary")
-    def get_accounts_summary(self) -> AccountsResponse: ...
+    def get_linked_banks(self) -> LinkedBanks:
+        """Gotta go through linked banks to get accounts."""
 
     @endpoint("accounts/{account_id}/bank/{bank_id}/transactions")
-    def get_account_transactions(
+    def search_account_transactions(
         self,
         account_id: str,
         bank_id: str,
@@ -345,49 +354,36 @@ class Api(MeatieClient):
         limit: int = 50,
         pageId: str = "",
         query: str = "",
-    ) -> TransactionsResponse: ...
+    ) -> SearchResults:
+        """Searches a single account for transactions."""
 
-    @endpoint("accounts/transactions/search")
-    def post_accounts_transactions_search(
-        self, body: TransactionsSearchBody
-    ) -> TransactionsSearchResponse: ...
+    @endpoint("accounts/transactions/search", method="POST")
+    def summarise_transactions(self, body: Filter) -> TransactionsSummary:
+        """Returns combined transactions of all accounts."""
 
     @endpoint("cards")
-    def get_cards(self) -> CardsResponse: ...
+    def get_cards(self) -> Cards:
+        """Returns details of payment cards."""
 
     @endpoint("v2/devices")
-    def get_devices(self, deviceUuid: str) -> list[Device]: ...
+    def get_devices(self, deviceUuid: str) -> list[Device]:
+        """Returns enrolled authentication devices."""
 
     @endpoint("device/{device_id}")
-    def delete_device(self, device_id: str) -> str: ...
+    def delete_device(self, device_id: str) -> str:
+        """Removes (invalidates) authentication device."""
 
     @endpoint("contacts")
-    def get_contacts(self) -> dict: ...
+    def get_contacts(self) -> Contacts:
+        """Returns details of payment contacts."""
 
 
-class Client(httpx.Client):
-    """httpx.Client initialised with a passkey to make authenticated requests to ubank.
-
-    Initialising the class performs webauthn authentication using the supplied passkey.
-    ubank is the Relying Party (RP). The supplied passkey signs an assertion using
-    a challenge from RP - SoftWebauthnDevice.get().  The assertion is sent back
-    to RP for verification.
-
-    The result from this call is transformed and sent back to ubank.
-
-    completes webauthn flow
-
-        super().__init__(
-            headers=client.headers,
-            cookies=client.cookies,
-            base_url="https://api.ubank.com.au/app/v1/",
-        )
-
-    Initialised with a passkey.  Client(pass)
+class HttpClient(httpx.Client):
+    """httpx client customised to authenticate with ubank.
 
     Requests are authenticated using the supplied passkey.
 
-    Use this class as a context manager to ensure ubank sessions and HTTP connections
+    Use this class with a context manager to ensure ubank sessions and HTTP connections
     are properly closed.
 
     ```python
@@ -403,7 +399,14 @@ class Client(httpx.Client):
     """
 
     def __init__(self, passkey: Passkey) -> None:
-        """Initialises ubank session using passkey to authenticate.
+        """Initialises authenticated session with passkey.
+
+        This method performs performs webauthn authentication with ubank -- the
+        Relying Party (RP):
+        - we request challenge from RP
+        - we sign assertion with challenge and send to RP for verification
+        - RP responds with tokens
+        - we configure HTTP client with tokens
 
         Caught HTTPStatusErrors are re-raised with a note containing the API's error
         response text. This requires Python >= 3.11.

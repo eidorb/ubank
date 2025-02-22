@@ -17,7 +17,6 @@ app = marimo.App(width="medium")
 @app.cell
 def _():
     import marimo as mo
-
     return (mo,)
 
 
@@ -145,7 +144,7 @@ def _(
     password,
     uploaded_passkey,
 ):
-    from ubank import Api
+    from ubank import Client
 
     if create_client.value:
         try:
@@ -155,8 +154,8 @@ def _(
                     io.BytesIO(uploaded_passkey.contents() or new_passkey_file.getvalue()),
                     password.value,
                 )
-                api = Api(passkey)
-                devices = api.get_devices(deviceUuid=passkey.device_id)
+                client = Client(passkey)
+                devices = client.get_devices(deviceUuid=passkey.device_id)
             mo.output.append(
                 mo.md(
                     f"""
@@ -172,7 +171,7 @@ def _(
             )
         except InvalidToken:
             pass
-    return Api, api, devices, passkey
+    return Client, client, devices, passkey
 
 
 @app.cell
@@ -190,24 +189,24 @@ def _(mo):
 
 
 @app.cell
-def _(api, get_balances, mo):
+def _(client, get_balances, mo):
     if get_balances.value:
         with mo.status.spinner():
-            accounts_response = api.get_accounts()
+            bank = client.get_linked_banks().linkedBanks[0]
         mo.output.append(
             mo.tree(
                 [
                     account.model_dump(include={"number", "label", "type", "balance"})
-                    for account in accounts_response.linkedBanks[0].accounts
+                    for account in bank.accounts
                 ]
             )
         )
-    return (accounts_response,)
+    return (bank,)
 
 
 @app.cell
 def _(mo):
-    from ubank import TransactionsSearchBody
+    from ubank import Filter
 
     search_transactions = mo.ui.run_button(label="Search")
     from_date = mo.ui.date()
@@ -223,28 +222,15 @@ def _(mo):
         Limit the number of results to {limit}.
         """
     )
-    return (
-        TransactionsSearchBody,
-        from_date,
-        limit,
-        search_transactions,
-        to_date,
-    )
+    return Filter, from_date, limit, search_transactions, to_date
 
 
 @app.cell
-def _(
-    TransactionsSearchBody,
-    api,
-    from_date,
-    mo,
-    search_transactions,
-    to_date,
-):
+def _(Filter, client, from_date, mo, search_transactions, to_date):
     if search_transactions.value:
         with mo.status.spinner():
-            search_response = api.post_accounts_transactions_search(
-                body=TransactionsSearchBody(fromDate=from_date.value, toDate=to_date.value)
+            search_response = client.summarise_transactions(
+                body=Filter(fromDate=from_date.value, toDate=to_date.value)
             )
         mo.output.append(
             mo.ui.table(

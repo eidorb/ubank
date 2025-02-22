@@ -5,10 +5,10 @@ import pytest
 from httpx import HTTPStatusError
 
 from ubank import (
-    Api,
+    Client,
+    Filter,
     Passkey,
     SoftWebauthnDevice,
-    TransactionsSearchBody,
     __version__,
     add_passkey,
     int8array_to_bytes,
@@ -155,8 +155,8 @@ def test_add_passkey_bad_username():
         assert "Username invalid" in e.__notes__[0]
 
 
-def test_api():
-    """Tests declared API methods using passkey loaded from passkey.txt."""
+def test_client():
+    """Tests declared API endpoint methods using passkey loaded from passkey.txt."""
     # Skip test if hard-coded passkey file is not available.
     try:
         with open("passkey.txt", "rb") as f:
@@ -165,39 +165,33 @@ def test_api():
         pytest.skip(str(e))
 
     # Authenticate to ubank with passkey.
-    with Api(passkey) as api:
+    with Client(passkey) as client:
         assert (
-            api.client.get("accounts").json()["linkedBanks"][0]["accounts"][0][
+            client.client.get("accounts").json()["linkedBanks"][0]["accounts"][0][
                 "balance"
             ]["currency"]
             == "AUD"
         )
 
-        customer = api.get_customer_details()
+        customer = client.get_customer_details()
         assert customer.addresses[0].addressFormat == "AUS"
-        accounts = api.get_accounts()
-        assert accounts.linkedBanks[0].accounts[0].balance.currency == "AUD"
-        assert (
-            api.get_accounts_summary().linkedBanks[0].accounts[0].balance.currency
-            == "AUD"
+        banks = client.get_linked_banks().linkedBanks
+        assert banks[0].accounts[0].balance.currency == "AUD"
+        assert client.summarise_transactions(
+            body=Filter(fromDate=date(2024, 1, 1), toDate=date(2025, 1, 1), limit=100)
         )
-        assert api.post_accounts_transactions_search(
-            body=TransactionsSearchBody(
-                fromDate=date(2024, 1, 1), toDate=date(2025, 1, 1), limit=100
-            )
-        )
-        for account in accounts.linkedBanks[0].accounts:
-            assert api.get_account_transactions(
+        for account in banks[0].accounts:
+            assert client.search_account_transactions(
                 account_id=account.id,
-                bank_id=accounts.linkedBanks[0].bankId,
+                bank_id=banks[0].bankId,
                 customerId=customer.customerId,
             )
-        assert api.get_cards()
+        assert client.get_cards()
         # Name of a device should match this passkey.
         assert [
             device
-            for device in api.get_devices(deviceUuid=passkey.device_id)
+            for device in client.get_devices(deviceUuid=passkey.device_id)
             if device.deviceName == passkey.name
         ]
-        assert api.delete_device(device_id="test-2f9ae784c84d")
-        assert api.get_contacts()
+        assert client.delete_device(device_id="test-2f9ae784c84d")
+        assert client.get_contacts()
