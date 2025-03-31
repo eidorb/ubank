@@ -121,7 +121,7 @@ with Api(passkey) as api:
 
 ## Example web application
 
-`notebook.py` is a [marimo](https://marimo.io) notebook that looks like this [this](https://raw.githack.com/eidorb/ubank/refs/heads/master/notebook.html).
+`notebook.py` is a [marimo notebook](https://eidorb.github.io/ubank/notebook.html).
 It demonstrates usage of the API client class to explore ubank's API.
 
 Open `notebook.py` in the marimo editor:
@@ -179,13 +179,8 @@ Update `test_version` test.
 
 Create version tag and push to GitHub:
 
-```console
-$ git tag "v$(uvx hatch version)"
-$ git push origin "v$(uvx hatch version)"
-Total 0 (delta 0), reused 0 (delta 0), pack-reused 0
-To github.com:eidorb/ubank.git
- * [new tag]         v2.0.0 -> v2.0.0
-```
+    git tag "v$(uvx hatch version)"
+    git push origin "v$(uvx hatch version)"
 
 Open new release form for tag:
 
@@ -193,6 +188,11 @@ Open new release form for tag:
 
 Publishing a release triggers this [workflow](.github/workflows/workflow.yml)
 which builds and publishes the package to [PyPI](https://pypi.org/project/ubank/).
+
+If you screw up -- delete local and remote tags and have another go:
+
+    git tag -d "v$(uvx hatch version)"
+    git push origin --delete "v$(uvx hatch version)"
 
 
 ## Changelog
