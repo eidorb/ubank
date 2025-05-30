@@ -197,6 +197,11 @@ If you screw up -- delete local and remote tags and have another go:
 
 ## Changelog
 
+### 2.2.0
+
+- Rework API method and model names to have more meaning
+
+
 ### 2.1.0
 
 - Passkey encrypted with ubank password
