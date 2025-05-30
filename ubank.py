@@ -42,7 +42,7 @@ __version__ = "2.1.0"
 # Unchanging headers in every request.
 base_headers = {
     "Origin": "ionic://bank86400",
-    "x-api-version": "32",
+    "x-api-version": "33",
     "x-private-api-key": "ANZf5WgzmVLmTUwAQyuCq7LspXF2pd4N",
 }
 
@@ -242,12 +242,12 @@ class Passkey:
         hardware_id = str(uuid.uuid4())
         # Start with an empty device ID. ubank will assign one later.
         device_id = ""
-        # Hard coded Build device meta string from app version and device name.
+        # Hard coded device meta string from app version and device name.
         device_meta = json.dumps(
             {
                 # Keep track with the latest version in case API blocks old versions: https://apps.apple.com/au/app/id1449543099.
-                "appVersion": "11.103.3",
-                "binaryVersion": "11.103.3",
+                "appVersion": "11.133.3",
+                "binaryVersion": "11.133.3",
                 # Keep track with latest iPhone model in case API blocks old models.
                 # Matches format of "Hardware strings" row in this table, replacing ',' with '-':
                 # https://en.wikipedia.org/wiki/List_of_iPhone_models
