@@ -197,6 +197,11 @@ If you screw up -- delete local and remote tags and have another go:
 
 ## Changelog
 
+### 2.2.1
+
+- `get_linked_banks()` returns linked external bank accounts
+
+
 ### 2.2.0
 
 - Rework API method and model names to have more meaning

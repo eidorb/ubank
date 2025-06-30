@@ -36,7 +36,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from soft_webauthn_patched import SoftWebauthnDevice
 
-__version__ = "2.2.0"
+__version__ = "2.2.1"
 
 
 # Unchanging headers in every request.
