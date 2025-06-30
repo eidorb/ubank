@@ -197,14 +197,21 @@ If you screw up -- delete local and remote tags and have another go:
 
 ## Changelog
 
+### 2.2.2
+
+- Fix potentially optional Transaction fields (thanks [@CactiNotch](https://github.com/CactiNotch)!)
+
+
 ### 2.2.1
 
-- `get_linked_banks()` returns linked external bank accounts
+- `get_linked_banks()` returns linked external bank accounts (thanks [@CactiNotch](https://github.com/CactiNotch)!)
+
 
 
 ### 2.2.0
 
 - Rework API method and model names to have more meaning
+
 
 
 ### 2.1.0
