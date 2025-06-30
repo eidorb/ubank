@@ -143,9 +143,9 @@ class Transaction(BaseModel):
     cbsId: str
     bankId: str
     accountId: str
-    posted: datetime
-    completed: datetime
-    # Shitty API, almost every field is potentially optional.
+    # It seems almost every field is potentially optional.
+    posted: Optional[datetime] = None
+    completed: Optional[datetime] = None
     value: Optional[Value] = None
     type: Optional[str] = None
     shortDescription: Optional[str] = None
@@ -173,6 +173,10 @@ class Transaction(BaseModel):
     typeCode: Optional[str] = None
     longDescription: Optional[str] = None
     lwc: Optional[dict] = None
+
+    # If other fields (not defined above) are returned in the response, they are
+    # made available through __pydantic_extra__.
+    model_config = ConfigDict(extra="allow")
 
 
 class TransactionsSummary(BaseModel):
