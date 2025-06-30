@@ -181,6 +181,7 @@ def test_client():
             body=Filter(fromDate=date(2024, 1, 1), toDate=date(2025, 1, 1), limit=100)
         )
         for account in banks[0].accounts:
+            assert account.__pydantic_extra__  # accounts should have extra fields
             assert client.search_account_transactions(
                 account_id=account.id,
                 bank_id=banks[0].bankId,

@@ -32,7 +32,7 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from fido2 import cbor
 from meatie import endpoint
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from soft_webauthn_patched import SoftWebauthnDevice
 
@@ -98,23 +98,24 @@ class Balance(BaseModel):
 class Account(BaseModel):
     id: str
     number: str
-    bsb: str
     label: str
     nickname: str
     type: str
     balance: Balance
     status: str
-    lastBalanceRefresh: datetime
     openDate: datetime
-    isJointAccount: bool
-    depositProductData: dict
-    metadata: Optional[dict] = None
+
+    # Other fields depend on account type, access them through .__pydantic_extra__.
+    model_config = ConfigDict(extra="allow")
 
 
 class Bank(BaseModel):
     bankId: int
     shortBankName: str
     accounts: list[Account]
+
+    # Linked external banks have other fields accessible through .__pydantic_extra__.
+    model_config = ConfigDict(extra="allow")
 
 
 class LinkedBanks(BaseModel):
@@ -342,8 +343,14 @@ class Client(meatie_httpx.Client):
         """Returns customer details."""
 
     @endpoint("accounts")
-    def get_linked_banks(self) -> LinkedBanks:
-        """Gotta go through linked banks to get accounts."""
+    def get_linked_banks(
+        self, externalRefresh: str = "false", refresh: str = "false", type: str = "all"
+    ) -> LinkedBanks:
+        """Returns bank account details (including linked external accounts).
+
+        - `externalRefresh` set to 'true' initiates a refresh of linked account data.
+        - `type` sets type of accounts returned: 'internal', 'external', or 'all'.
+        """
 
     @endpoint("accounts/{account_id}/bank/{bank_id}/transactions")
     def search_account_transactions(
