@@ -21,7 +21,7 @@ from ubank import (
 
 
 def test_version():
-    assert __version__ == "2.2.2"
+    assert __version__ == "2.2.3"
 
 
 def test_int8array_to_bytes():

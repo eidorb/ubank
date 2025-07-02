@@ -28,7 +28,7 @@ path = "ubank.py"
 
 [tool.hatch.build.targets.sdist]
 exclude = ["notebook.gif"]
-
+# https://docs.astral.sh/uv/concepts/build-backend/#file-inclusion-and-exclusion
 [tool.hatch.build.targets.wheel]
 include = [
     "ubank.py",
