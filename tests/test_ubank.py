@@ -9,6 +9,7 @@ from ubank import (
     Filter,
     Passkey,
     SoftWebauthnDevice,
+    TransactionsSummary,
     __version__,
     add_passkey,
     int8array_to_bytes,
@@ -20,7 +21,7 @@ from ubank import (
 
 
 def test_version():
-    assert __version__ == "2.2.2"
+    assert __version__ == "2.2.3"
 
 
 def test_int8array_to_bytes():
@@ -160,7 +161,7 @@ def test_client():
     # Skip test if hard-coded passkey file is not available.
     try:
         with open("passkey.txt", "rb") as f:
-            passkey = Passkey.load(f)
+            passkey = Passkey.load(f, password="")
     except FileNotFoundError as e:
         pytest.skip(str(e))
 
@@ -196,3 +197,30 @@ def test_client():
         ]
         assert client.delete_device(device_id="test-2f9ae784c84d")
         assert client.get_contacts()
+
+
+def test_summarise_transactions_with_all_fields():
+    """Test summarise_transactions with all Filter fields set, using the real API and passkey."""
+    # Skip test if hard-coded passkey file is not available.
+    try:
+        with open("passkey.txt", "rb") as f:
+            passkey = Passkey.load(f, password="")
+    except FileNotFoundError as e:
+        pytest.skip(str(e))
+
+    with Client(passkey) as client:
+        filter_body = Filter(
+            fromDate=date(2024, 1, 1),
+            toDate=date(2024, 6, 1),
+            limit=5,
+            fromAmount=100,
+            toAmount=1000,
+            accountId=[],
+            query="groceries",
+            direction="CR",
+            paginationToken=None,
+        )
+        result = client.summarise_transactions(body=filter_body)
+        assert isinstance(result, TransactionsSummary)
+        assert hasattr(result, "transactions")
+        assert isinstance(result.transactions, list)

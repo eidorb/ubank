@@ -36,7 +36,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from soft_webauthn_patched import SoftWebauthnDevice
 
-__version__ = "2.2.2"
+__version__ = "2.2.3"
 
 
 # Unchanging headers in every request.
@@ -191,6 +191,14 @@ class Filter(BaseModel):
     fromDate: date
     toDate: date
     limit: int = 5
+    fromAmount: Optional[int] = None
+    toAmount: Optional[int] = None
+    accountId: Optional[list[str]] = None
+    query: Optional[str] = None
+    # either "CR" credit (money in) or "DR" debit (money out)
+    direction: Optional[str] = None
+    # paginationToken is found as nextPageId in the response of your first use of summarise_transactions
+    paginationToken: Optional[str] = None
 
 
 class SearchResults(BaseModel):
