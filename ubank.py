@@ -22,7 +22,7 @@ from base64 import b64encode, urlsafe_b64encode
 from datetime import date, datetime
 from decimal import Decimal
 from getpass import getpass
-from typing import IO, AnyStr, Optional
+from typing import IO, Annotated, AnyStr, Literal, Optional
 
 import httpx
 import meatie_httpx
@@ -31,7 +31,7 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from fido2 import cbor
-from meatie import endpoint
+from meatie import api_ref, endpoint
 from pydantic import BaseModel, ConfigDict, Field
 
 from soft_webauthn_patched import SoftWebauthnDevice
@@ -187,10 +187,39 @@ class TransactionsSummary(BaseModel):
 
 
 class Filter(BaseModel):
-    timezone: str = "Australia/Lord_Howe"
     fromDate: date
     toDate: date
-    limit: int = 5
+    limit: Annotated[int, Field(ge=1, le=200)]
+    accountId: Optional[list[str]] = None  # list of account ids
+    direction: Optional[Literal["CR", "DR"]] = None  # CR: money in or DR: money out
+    excludeTransactionType: Optional[list[Literal["Pending"]]] = None
+    fromAmount: Optional[float] = None
+    # TODO: test pagination
+    paginationToken: Optional[str] = None  # set to nextPageId from previous response
+    query: Optional[str] = None
+    timezone: str = "Australia/Sydney"  # IANA time zone database identifier
+    toAmount: Optional[float] = None
+    spendingFootprintSubCategory: Optional[
+        list[
+            Literal[
+                "Shopping",
+                "Drink & Dine",
+                "Entertainment",
+                "Holiday",
+                "Car & Transport",
+                "Home & Bills",
+                "Groceries",
+                "Health & Fitness",
+                "Pets",
+                "Insurance",
+                "Education",
+                "Other",
+                "Uncategorised",
+                "Finance",
+                "Loans & Repayments",
+            ]
+        ]
+    ] = None
 
 
 class SearchResults(BaseModel):
@@ -369,8 +398,18 @@ class Client(meatie_httpx.Client):
         """Searches a single account for transactions."""
 
     @endpoint("accounts/transactions/search", method="POST")
-    def summarise_transactions(self, body: Filter) -> TransactionsSummary:
-        """Returns combined transactions of all accounts."""
+    def summarise_transactions(
+        self,
+        # Exclude any Filter fields set to None before sending.
+        body: Annotated[
+            Filter, api_ref(fmt=lambda body: body.model_dump(exclude_none=True))
+        ],
+    ) -> TransactionsSummary:
+        """Returns filtered transactions from all accounts.
+
+        When total transactions exceeds limit, set Filter.paginationToken to value
+        of TransactionSummary.nextPageId from previous response in subsequent requests.
+        """
 
     @endpoint("cards")
     def get_cards(self) -> Cards:

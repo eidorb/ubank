@@ -9,6 +9,7 @@ from ubank import (
     Filter,
     Passkey,
     SoftWebauthnDevice,
+    TransactionsSummary,
     __version__,
     add_passkey,
     int8array_to_bytes,
@@ -173,13 +174,55 @@ def test_client():
             == "AUD"
         )
 
+        # test .get_customer_details()
         customer = client.get_customer_details()
         assert customer.addresses[0].addressFormat == "AUS"
+
+        # test .get_linked_banks()
         banks = client.get_linked_banks().linkedBanks
         assert banks[0].accounts[0].balance.currency == "AUD"
+
+        # test .summarise_transactions()
+        # Validate Transaction model across a year's worth of transactions.
         assert client.summarise_transactions(
-            body=Filter(fromDate=date(2024, 1, 1), toDate=date(2025, 1, 1), limit=100)
+            body=Filter(fromDate=date(2024, 1, 1), toDate=date(2025, 1, 1), limit=200)
         )
+        # Test pagination.
+        first_page = client.summarise_transactions(
+            body=Filter(fromDate=date(2024, 1, 1), toDate=date(2025, 1, 1), limit=1)
+        )
+        assert first_page.totalCount > 1
+        second_page = client.summarise_transactions(
+            body=Filter(
+                fromDate=date(2024, 1, 1),
+                toDate=date(2025, 1, 1),
+                limit=1,
+                paginationToken=first_page.nextPageId,
+            )
+        )
+        assert second_page.transactions != first_page.transactions
+        assert second_page.nextPageId != first_page.nextPageId
+        # Test optional Filter fields.
+        assert (
+            client.summarise_transactions(
+                body=Filter(
+                    fromDate=date(2024, 1, 1),
+                    toDate=date(2025, 1, 1),
+                    limit=5,
+                    accountId=[banks[0].accounts[0].id],
+                    direction="CR",
+                    excludeTransactionType=["Pending"],
+                    fromAmount=100,
+                    query="groceries",
+                    timezone="Australia/Lord_Howe",
+                    toAmount=1000.50,
+                    spendingFootprintSubCategory=["Car & Transport", "Pets"],
+                )
+            ).totalCount
+            == 0
+        )
+
+        # test client.search_account_transactions()
         for account in banks[0].accounts:
             assert account.__pydantic_extra__  # accounts should have extra fields
             assert client.search_account_transactions(
@@ -187,12 +230,19 @@ def test_client():
                 bank_id=banks[0].bankId,
                 customerId=customer.customerId,
             )
+
+        # test .get_cards()
         assert client.get_cards()
-        # Name of a device should match this passkey.
+
+        # test .get_devices() returns name of passkey currently in use.
         assert [
             device
             for device in client.get_devices(deviceUuid=passkey.device_id)
             if device.deviceName == passkey.name
         ]
+
+        # test .delete_device()
         assert client.delete_device(device_id="test-2f9ae784c84d")
+
+        # test .get_contacts()
         assert client.get_contacts()
