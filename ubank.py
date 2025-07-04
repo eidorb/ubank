@@ -395,7 +395,11 @@ class Client(meatie_httpx.Client):
         pageId: str = "",
         query: str = "",
     ) -> SearchResults:
-        """Searches a single account for transactions."""
+        """Searches a single account for transactions.
+
+        When total transactions exceeds limit, set pageId to value of
+        SearchResults.nextPageId from previous response in subsequent requests.
+        """
 
     @endpoint("accounts/transactions/search", method="POST")
     def summarise_transactions(

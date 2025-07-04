@@ -182,6 +182,23 @@ def test_client():
         banks = client.get_linked_banks().linkedBanks
         assert banks[0].accounts[0].balance.currency == "AUD"
 
+        # test client.search_account_transactions() pagination
+        first_page = client.search_account_transactions(
+            account_id=banks[0].accounts[0].id,
+            bank_id=banks[0].bankId,
+            customerId=customer.customerId,
+            limit=1,
+        )
+        second_page = client.search_account_transactions(
+            account_id=banks[0].accounts[0].id,
+            bank_id=banks[0].bankId,
+            customerId=customer.customerId,
+            limit=1,
+            pageId=first_page.nextPageId,
+        )
+        assert second_page.transactions != first_page.transactions
+        assert second_page.nextPageId != first_page.nextPageId
+
         # test .summarise_transactions()
         # Validate Transaction model across a year's worth of transactions.
         assert client.summarise_transactions(
@@ -222,7 +239,6 @@ def test_client():
             == 0
         )
 
-        # test client.search_account_transactions()
         for account in banks[0].accounts:
             assert account.__pydantic_extra__  # accounts should have extra fields
             assert client.search_account_transactions(
