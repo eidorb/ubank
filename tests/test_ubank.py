@@ -9,7 +9,6 @@ from ubank import (
     Filter,
     Passkey,
     SoftWebauthnDevice,
-    TransactionsSummary,
     __version__,
     add_passkey,
     int8array_to_bytes,

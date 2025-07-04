@@ -194,7 +194,6 @@ class Filter(BaseModel):
     direction: Optional[Literal["CR", "DR"]] = None  # CR: money in or DR: money out
     excludeTransactionType: Optional[list[Literal["Pending"]]] = None
     fromAmount: Optional[float] = None
-    # TODO: test pagination
     paginationToken: Optional[str] = None  # set to nextPageId from previous response
     query: Optional[str] = None
     timezone: str = "Australia/Sydney"  # IANA time zone database identifier
@@ -276,28 +275,11 @@ class Passkey:
         hardware_id = str(uuid.uuid4())
         # Start with an empty device ID. ubank will assign one later.
         device_id = ""
-        # Hard coded device meta string from app version and device name.
-        device_meta = json.dumps(
-            {
-                # Keep track with the latest version in case API blocks old versions: https://apps.apple.com/au/app/id1449543099.
-                "appVersion": "11.133.3",
-                "binaryVersion": "11.133.3",
-                # Keep track with latest iPhone model in case API blocks old models.
-                # Matches format of "Hardware strings" row in this table, replacing ',' with '-':
-                # https://en.wikipedia.org/wiki/List_of_iPhone_models
-                "deviceName": "iPhone17-3",
-                "environment": "production",
-                "instance": "live",
-                "native": True,
-                "platform": "ios",
-            }
-        )
         # Start with empty username, it will be assigned by ubank later.
         username = ""
         self.name = name
         self.hardware_id = hardware_id
         self.device_id = device_id
-        self.device_meta = device_meta
         self.username = username
         self.soft_webauthn_device = SoftWebauthnDevice()
 
@@ -323,7 +305,6 @@ class Passkey:
                         "name": self.name,
                         "hardware_id": self.hardware_id,
                         "device_id": self.device_id,
-                        "device_meta": self.device_meta,
                         "username": self.username,
                         "soft_webauthn_device_dict": to_dict(self.soft_webauthn_device),
                     }
@@ -339,7 +320,6 @@ class Passkey:
         passkey = Passkey(deserialized_passkey["name"])
         passkey.hardware_id = deserialized_passkey["hardware_id"]
         passkey.device_id = deserialized_passkey["device_id"]
-        passkey.device_meta = deserialized_passkey["device_meta"]
         passkey.username = deserialized_passkey["username"]
         passkey.soft_webauthn_device = from_dict(
             deserialized_passkey["soft_webauthn_device_dict"]
@@ -466,12 +446,12 @@ class HttpClient(httpx.Client):
         response text. This requires Python >= 3.11.
         """
         with httpx.Client(
-            # Headers that are present from the get go. Not all
+            # Headers that are present from the get go.
             headers={
                 **base_headers,
                 "x-hardware-id": passkey.hardware_id,
                 "x-device-id": passkey.device_id,
-                "x-device-meta": passkey.device_meta,
+                "x-device-meta": generate_device_meta(),
             },
         ) as client:
             # Hack signature counter to Unix time. This 32-bit counter value can
@@ -680,7 +660,7 @@ def add_passkey(username: str, password: str, passkey_name: str) -> Passkey:
             **base_headers,
             "x-hardware-id": passkey.hardware_id,
             "x-device-id": passkey.device_id,
-            "x-device-meta": passkey.device_meta,
+            "x-device-meta": generate_device_meta(),
         }
     ) as client:
         # Start enrolment by identifying ourselves.
@@ -832,6 +812,35 @@ def from_dict(device_dict: dict) -> SoftWebauthnDevice:
     device.user_handle = device_dict["user_handle"]
     device.sign_count = device_dict["sign_count"]
     return device
+
+
+def generate_device_meta(device_name="iPhone17-3") -> str:
+    """Returns x-device-meta header value with dynamic app versions.
+
+    Calls ubank API to determine minimum required version. The value is cached so
+    that the lookup only happens once for the life of the program.
+
+    Set device_name to latest iPhone model in case API blocks old models.
+    Matches format of "Hardware strings" row in this table, replacing ',' with '-':
+    https://en.wikipedia.org/wiki/List_of_iPhone_models
+    """
+    # The health endpoint tells us the minimum required version. See version history
+    # on the app store: https://apps.apple.com/au/app/id1449543099.
+    if not hasattr(generate_device_meta, "min_version"):
+        generate_device_meta.min_version = httpx.get(
+            "https://api.ubank.com.au/app/v1/health"
+        ).json()["minBinaryVersion"]  # see forceMinBinaryVersion too
+    return json.dumps(
+        {
+            "appVersion": generate_device_meta.min_version,
+            "binaryVersion": generate_device_meta.min_version,
+            "deviceName": device_name,
+            "environment": "production",
+            "instance": "live",
+            "native": True,
+            "platform": "ios",
+        }
+    )
 
 
 def cli():
