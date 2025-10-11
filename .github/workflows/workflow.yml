@@ -27,6 +27,7 @@ jobs:
           uv run --python 3.11 -m pytest -v
           uv run --python 3.12 -m pytest -v
           uv run --python 3.13 -m pytest -v
+          uv run --python 3.14 -m pytest -v
   publish:
     needs: test
     # Only publish if releasing.
