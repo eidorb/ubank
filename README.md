@@ -197,6 +197,11 @@ If you screw up -- delete local and remote tags and have another go:
 
 ## Changelog
 
+##### 2.2.5
+
+- Update dependencies to support Python 3.14
+
+
 ##### 2.2.4
 
 - Generate `x-device-meta` with dynamic versions (thanks [@gdarby70](https://github.com/eidorb/ubank/issues/9)!)
