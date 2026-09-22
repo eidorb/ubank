@@ -727,6 +727,7 @@ dependencies = [
     { name = "meatie" },
     { name = "pydantic" },
     { name = "soft-webauthn" },
+    { name = "wre-client-akamai" },
 ]
 
 [package.dev-dependencies]
@@ -741,6 +742,7 @@ requires-dist = [
     { name = "meatie", specifier = ">=0.1.20" },
     { name = "pydantic", specifier = ">=2.12.0" },
     { name = "soft-webauthn", specifier = ">=0.1.4" },
+    { name = "wre-client-akamai", specifier = ">=3.1.1" },
 ]
 
 [package.metadata.requires-dev]
@@ -802,4 +804,28 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/86/eb/20b6cdf273913d0ad05a6a14aed4b9a85591c18a987a3d47f20fa13dcc47/websockets-15.0.1-cp313-cp313-win32.whl", hash = "sha256:ba9e56e8ceeeedb2e080147ba85ffcd5cd0711b89576b83784d8605a7df455fa", size = 176393, upload-time = "2025-03-05T20:02:53.814Z" },
     { url = "https://files.pythonhosted.org/packages/1b/6c/c65773d6cab416a64d191d6ee8a8b1c68a09970ea6909d16965d26bfed1e/websockets-15.0.1-cp313-cp313-win_amd64.whl", hash = "sha256:e09473f095a819042ecb2ab9465aee615bd9c2028e4ef7d933600a8401c79561", size = 176837, upload-time = "2025-03-05T20:02:55.237Z" },
     { url = "https://files.pythonhosted.org/packages/fa/a8/5b41e0da817d64113292ab1f8247140aac61cbf6cfd085d6a0fa77f4984f/websockets-15.0.1-py3-none-any.whl", hash = "sha256:f7a866fbc1e97b5c617ee4116daaa09b722101d4a3c170c787450ba409f9736f", size = 169743, upload-time = "2025-03-05T20:03:39.41Z" },
+]
+
+[[package]]
+name = "wre-client-akamai"
+version = "3.1.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "wre-runtime" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/40/5c/73252518c071d058b71221ad45725a8c8f6d37a91ce747487d1ec53e0260/wre_client_akamai-3.1.1-py3-none-macosx_10_12_x86_64.whl", hash = "sha256:0a6e2f76d658647ddbff4a88f5c2d38eb5b85e1963ad8b66ba7ac5086ab0e9e5", size = 22900847, upload-time = "2026-08-18T10:54:43.407Z" },
+    { url = "https://files.pythonhosted.org/packages/c4/8b/8b5771394684cf06122778ea26c1059cef2f06b995d0357f9d2ee9a8be22/wre_client_akamai-3.1.1-py3-none-macosx_11_0_arm64.whl", hash = "sha256:58407fed54591b4d24d20038c6587c0e522e357ea3b76dd4a7ca932040ef31c4", size = 21293096, upload-time = "2026-08-18T10:54:46.123Z" },
+    { url = "https://files.pythonhosted.org/packages/50/bf/5d1d07321e363e9261dafb6841bc120f717781c5248838fd8fcf57639ed2/wre_client_akamai-3.1.1-py3-none-manylinux_2_35_aarch64.whl", hash = "sha256:5ba392378552578d3d9d0854934e685071c7b1c2ffb58574482bfadfd5489bc4", size = 22693454, upload-time = "2026-08-18T10:54:48.583Z" },
+    { url = "https://files.pythonhosted.org/packages/57/9c/45fe03bf5ffa3f313a6c791fb11eb1a0b76ac58da8f8549f7a02be1b3511/wre_client_akamai-3.1.1-py3-none-manylinux_2_35_x86_64.whl", hash = "sha256:34381fc24947a705e9753869778fe513eb9147c89c11e7e7ea78084275e2c4f5", size = 23592288, upload-time = "2026-08-18T10:54:50.817Z" },
+    { url = "https://files.pythonhosted.org/packages/13/20/9322d957f3ee7822d1cd755b039e9814c9f110fb1aa8f8d46e8a2596fb53/wre_client_akamai-3.1.1-py3-none-win_amd64.whl", hash = "sha256:83083378e0b815330bac6c942535a548104fa4eae01039a0f02eb7cdbc01a741", size = 22788269, upload-time = "2026-08-18T10:54:53.08Z" },
+]
+
+[[package]]
+name = "wre-runtime"
+version = "3.1.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/78/d9/d0002914e20eb26f658e8491f4c47900a3bb9970a69981c4fed65d4c94a9/wre_runtime-3.1.1.tar.gz", hash = "sha256:65a5b970005585bef5552e64f72531e10a6e7a3207ac80de503b2c028ae92538", size = 8636, upload-time = "2026-08-18T10:48:16.602Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c2/d8/364839e4b0210dd864a66c788a601cc81d06dc9154547cc1f430efc7b008/wre_runtime-3.1.1-py3-none-any.whl", hash = "sha256:d2d9ad4466d2d3928942c45e19f24cddafb78d7131f90a0130d7dc1f77a2377d", size = 9248, upload-time = "2026-08-18T10:48:15.49Z" },
 ]
