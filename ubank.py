@@ -34,7 +34,7 @@ from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from fido2 import cbor
 from meatie import api_ref, endpoint
 from pydantic import BaseModel, ConfigDict, Field
-from wre_client_akamai import AkamaiClient, RequestInput
+from wre_client_akamai import AkamaiClient, AkamaiConfig, RequestInput
 
 from soft_webauthn_patched import SoftWebauthnDevice
 
@@ -49,7 +49,7 @@ base_headers = {
 }
 
 # Referenced in Client and add_passkey() for attestation and assertion.
-origin = "https://www.ubank.com.au"
+origin = "www.ubank.com.au"
 
 
 class Address(BaseModel):
@@ -274,7 +274,7 @@ class Passkey:
         super().__init__()
         self.name = name
         # Generate a fresh hardware ID.
-        hardware_id = str(uuid.uuid4())
+        hardware_id = str(uuid.uuid1())
         # Start with an empty device ID. ubank will assign one later.
         device_id = ""
         # Start with empty username, it will be assigned by ubank later.
@@ -475,28 +475,57 @@ class AkamaiTransport(httpx.BaseTransport):
         self.akamai_client.close()
 
 
+def add_request_id(request: httpx.Request) -> None:
+    """Sets unique x-request-id header on request."""
+    request.headers["x-request-id"] = str(uuid.uuid1())
+
+
 class HttpClient(httpx.Client):
     """httpx client customised to authenticate with ubank.
 
-    Requests are authenticated using the supplied passkey.
+    Requests are authenticated with a passkey, if supplied. Authenticate manually
+    with `.authenticate(passkey)`.
 
-    Use this class with a context manager to ensure ubank sessions and HTTP connections
-    are properly closed.
+    Set `api_version` to customise `x-api-version` header value.
+    Set `app_version` to customise app version in `x-device-meta` header value.
 
-    ```python
-    with Client(passkey) as client:
-        ...
-    ```
+    Use as a context manager so the Akamai transport client is closed:
 
-    `base_url` is set to https://api.ubank.com.au/app/v1/. Use relative paths in requests:
+        with HttpClient(passkey) as client:
+            ...
+
+    `base_url` is set to https://www.ubank.com.au/app/v1/. Use relative paths in requests:
 
     ```python
     client.get("accounts/summary")
     ```
     """
 
-    def __init__(self, passkey: Passkey) -> None:
-        """Initialises authenticated session with passkey.
+    def __init__(
+        self, passkey: Optional[Passkey] = None, api_version="37", app_version="2.242.1"
+    ) -> None:
+        self.akamai_client = AkamaiClient.open(
+            AkamaiConfig(page_url="https://www.ubank.com.au/welcome/login/username")
+        )
+        self.akamai_client.solve({})  # solve some puzzles
+        super().__init__(
+            # standard headers for every request
+            headers={
+                "x-api-version": api_version,
+                "x-device-meta": generate_device_meta(
+                    self.akamai_client.info()["user_agent"], app_version
+                ),
+            },
+            # requests get a x-request-id
+            event_hooks={"request": [add_request_id]},
+            base_url="https://www.ubank.com.au/app/v1/",
+            transport=AkamaiTransport(self.akamai_client),
+        )
+        if passkey is not None:
+            self.authenticate(passkey)
+
+    def authenticate(self, passkey: Passkey) -> None:
+        """Authenticates session with supplied passkey.
 
         This method performs performs webauthn authentication with ubank -- the
         Relying Party (RP):
@@ -508,104 +537,65 @@ class HttpClient(httpx.Client):
         Caught HTTPStatusErrors are re-raised with a note containing the API's error
         response text. This requires Python >= 3.11.
         """
-        with httpx.Client(
-            # Headers that are present from the get go.
-            headers={
-                **base_headers,
-                "x-hardware-id": passkey.hardware_id,
-                "x-device-id": passkey.device_id,
-                "x-device-meta": generate_device_meta(),
-            },
-        ) as client:
-            # Hack signature counter to Unix time. This 32-bit counter value can
-            # be incremented by *any* positive value. By using Unix time, we don't
-            # have to muck about keeping track of counter values in the passkey file.
-            # https://www.w3.org/TR/webauthn-2/#signature-counter
-            passkey.soft_webauthn_device.sign_count = int(time.time())
+        self.headers["x-device-id"] = passkey.device_id
+        # Hack signature counter to Unix time. This 32-bit counter value can
+        # be incremented by *any* positive value. By using Unix time, we don't
+        # have to muck about keeping track of counter values in the passkey file.
+        # https://www.w3.org/TR/webauthn-2/#signature-counter
+        passkey.soft_webauthn_device.sign_count = int(time.time())
 
-            # Initiate authentication flow to receive challenge from relying party
-            # (ubank).
-            try:
-                response = client.get(
-                    "https://api.ubank.com.au/app/v1/session/authorize",
-                    params={
-                        "username": passkey.username,
-                    },
-                ).raise_for_status()
-            except httpx.HTTPStatusError as e:
-                e.add_note(e.response.text)
-                raise
+        # Initiate authentication flow to receive challenge from relying party
+        # (ubank).
+        try:
+            response = self.get(
+                "session/authorize",
+                params={"username": passkey.username},
+            ).raise_for_status()
+        except httpx.HTTPStatusError as e:
+            e.add_note(e.response.text)
+            raise
+        response_json = response.json()
 
-            # Parse credential request options from response.
-            options = parse_public_key_credential_request_options(
-                response.json()["publicKeyCredentialRequestOptions"]
-            )
-            # Make assertion object suitable for ubank by making values JSON-serializable.
-            assertion = prepare_assertion(
-                passkey.soft_webauthn_device.get(options, origin)
-            )
-            # Complete authentication flow by sending signed assertion to relying
-            # party.
-            try:
-                response = client.post(
-                    "https://api.ubank.com.au/app/v1/challenge/fido2-assertion",
-                    # Query parameters come from previous response.
-                    params={
-                        "nonce": response.json()["nonce"],
-                        "state": response.json()["state"],
-                        "session": response.json()["session"],
-                    },
-                    json={
-                        "assertion": json.dumps(assertion),
-                        # flowID comes from previous response.
-                        "flowId": response.json()["flowId"],
-                        "origin": origin,
-                    },
-                    # Set access and auth token headers from previous response.
-                    headers={
-                        "x-access-token": response.json()["accessToken"],
-                        "x-auth-token": response.json()["accessToken"],
-                    },
-                ).raise_for_status()
-            except httpx.HTTPStatusError as e:
-                e.add_note(e.response.text)
-                raise
-            # Set access and auth token headers for future requests.
-            self.access_token = client.headers["x-access-token"] = client.headers[
-                "x-auth-token"
-            ] = response.json()["accessToken"]
-            # Store other tokens in order to kill session in future.
-            self.refresh_token = response.json()["refreshToken"]
-            self.session_token = response.json()["sessionToken"]
-
-        # Initialise new httpx.Client, keeping headers and cookies from client.
-        super().__init__(
-            headers=client.headers,
-            cookies=client.cookies,
-            base_url="https://api.ubank.com.au/app/v1/",
+        # Parse credential request options from response.
+        options = parse_public_key_credential_request_options(
+            response.json()["publicKeyCredentialRequestOptions"]
         )
-
-    def _delete_session(self) -> None:
-        """Kills ubank session."""
-        self.request(
-            "DELETE",
-            "sessions",
-            json={
-                "accessToken": self.access_token,
-                "refreshToken": self.refresh_token,
-                "sessionToken": self.session_token,
-            },
-        ).raise_for_status()
-
-    def close(self) -> None:
-        """Kills ubank session before closing."""
-        self._delete_session()
-        super().close()
-
-    def __exit__(self, exc_type, exc_value, traceback) -> None:
-        """Handle use in context manager Kills ubank session before exiting the context."""
-        self._delete_session()
-        super().__exit__(exc_type, exc_value, traceback)
+        # Make assertion object suitable for ubank by making values JSON-serializable.
+        assertion = prepare_assertion(passkey.soft_webauthn_device.get(options, origin))
+        # Complete authentication flow by sending signed assertion to relying
+        # party.
+        try:
+            response = self.post(
+                "challenge/fido2-assertion",
+                # Query parameters come from previous response.
+                params={
+                    "nonce": response_json["nonce"],
+                    "state": response_json["state"],
+                    "session": response_json["session"],
+                },
+                json={
+                    "assertion": json.dumps(assertion),
+                    # flowID comes from previous response.
+                    "flowId": response_json["flowId"],
+                    "origin": origin,
+                },
+                # Set access and auth token headers from previous response.
+                headers={
+                    "x-access-token": response_json["accessToken"],
+                    "x-auth-token": response_json["accessToken"],
+                },
+            ).raise_for_status()
+        except httpx.HTTPStatusError as e:
+            e.add_note(e.response.text)
+            raise
+        response_json = response.json()
+        # Set access and auth token headers for future requests.
+        self.access_token = self.headers["x-access-token"] = self.headers[
+            "x-auth-token"
+        ] = response_json["accessToken"]
+        # Store other tokens in order to kill session in future.
+        self.refresh_token = response_json["refreshToken"]
+        self.session_token = response_json["sessionToken"]
 
 
 def derive_key(password: str, salt=b"") -> bytes:
@@ -877,7 +867,7 @@ def from_dict(device_dict: dict) -> SoftWebauthnDevice:
     return device
 
 
-def generate_device_meta(user_agent: str, app_version: str = "2.242.1") -> str:
+def generate_device_meta(user_agent: str, app_version: str) -> str:
     """Returns x-device-meta string from user agent and app version.
 
     Supply `user_agent` from call to `.info()["user_agent"]` on an instance of
