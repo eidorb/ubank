@@ -40,14 +40,6 @@ from soft_webauthn_patched import SoftWebauthnDevice
 
 __version__ = "2.2.5"
 
-
-# Unchanging headers in every request.
-base_headers = {
-    "Origin": "ionic://bank86400",
-    "x-api-version": "33",
-    "x-private-api-key": "ANZf5WgzmVLmTUwAQyuCq7LspXF2pd4N",
-}
-
 # Referenced in Client and add_passkey() for attestation and assertion.
 origin = "www.ubank.com.au"
 
@@ -699,97 +691,84 @@ def add_passkey(username: str, password: str, passkey_name: str) -> Passkey:
     This function returns sensitive key material. You are responsible for securing
     it!
 
-    :param username: ubank username
-    :param password: ubank password
-    :param passkey_name: Set passkey name (shown in ubank app)
-    :return: New passkey
+    - `username` is your ubank username
+    - `password` is your ubank password
+    - `passkey_name` sets passkey name (shown in ubank app)
     """
     # Initialise a software-based passkey.
     passkey = Passkey(name=passkey_name)
 
-    # Use a Client to persist cookies and setting default headers.
-    with httpx.Client(
-        headers={
-            **base_headers,
-            "x-hardware-id": passkey.hardware_id,
-            "x-device-id": passkey.device_id,
-            "x-device-meta": generate_device_meta(),
-        }
-    ) as client:
+    with HttpClient() as client:
         # Start enrolment by identifying ourselves.
         try:
             response = client.post(
-                url="https://api.ubank.com.au/app/v1/welcome",
+                url="welcome",
                 json={"identity": username},
             ).raise_for_status()
         except httpx.HTTPStatusError as e:
             e.add_note(e.response.text)
             raise
+        response_json = response.json()
 
         # Next, authenticate with password.
         try:
             response = client.post(
-                url="https://api.ubank.com.au/app/v1/challenge/password",
+                url="challenge/password",
                 json={"deviceName": passkey_name, "password": password},
-                # Set access and auth token headers from previous response.
-                headers={
-                    "x-access-token": response.json()["accessToken"],
-                    "x-auth-token": response.json()["accessToken"],
-                },
+                # xsrf token from previous response
+                headers={"x-xsrf-token": response_json["xsrfToken"]},
             ).raise_for_status()
         except httpx.HTTPStatusError as e:
             e.add_note(e.response.text)
             raise
+        response_json = response.json()
 
         # Authenticate with second factor: a security code sent to mobile.
         try:
             otp_response = client.post(
-                url="https://api.ubank.com.au/app/v1/challenge/otp",
+                url="challenge/otp",
                 # Set parameters returned in previous response.
                 params={
-                    "nonce": response.json()["nonce"],
-                    "state": response.json()["state"],
-                    "session": response.json()["session"],
+                    "nonce": response_json["nonce"],
+                    "state": response_json["state"],
+                    "session": response_json["session"],
                 },
                 json={
                     # flowID comes from previous response.
-                    "flowId": response.json()["flowId"],
+                    "flowId": response_json["flowId"],
                     # Prompt interactively for security code.
                     "otpValue": input(
-                        f"Enter security code sent to {response.json()['maskedMobileNumber']}: "
+                        f"Enter security code sent to {response_json['maskedMobileNumber']}: "
                     ),
                 },
-                # Set access and auth token headers from previous response.
-                headers={
-                    "x-access-token": response.json()["accessToken"],
-                    "x-auth-token": response.json()["accessToken"],
-                },
+                # xsrf token from previous response
+                headers={"x-xsrf-token": response_json["xsrfToken"]},
             ).raise_for_status()
         except httpx.HTTPStatusError as e:
             e.add_note(e.response.text)
             raise
+        otp_response_json = otp_response.json()
         # Store username UUID assigned by ubank contained in this response.
-        passkey.username = otp_response.json()["username"]
-        # Set access and auth token headers for future requests.
-        client.headers["x-access-token"] = client.headers["x-auth-token"] = (
-            otp_response.json()["accessToken"]
-        )
+        passkey.username = otp_response_json["username"]
 
         # Initiate registration of new credential (passkey) with relying party (ubank).
         try:
             response = client.post(
-                url="https://api.ubank.com.au/app/v1/v2/device",
+                url="v2/device",
                 json={"deviceName": passkey_name, "type": "FIDO2"},
+                # xsrf token from previous response
+                headers={"x-xsrf-token": otp_response_json["xsrfToken"]},
             ).raise_for_status()
         except httpx.HTTPStatusError as e:
             e.add_note(e.response.text)
             raise
+        response_json = response.json()
         # This response contains a device ID assigned by ubank. It's not set in
         # headers just quite yet though.
-        passkey.device_id = response.json()["deviceId"]
+        passkey.device_id = response_json["deviceId"]
         # Parse credential creation options from response.
         options = parse_public_key_credential_creation_options(
-            response.json()["publicKeyCredentialCreationOptions"]
+            response_json["publicKeyCredentialCreationOptions"]
         )
         # Make attestation object suitable for ubank by making values JSON-serializable.
         attestation = prepare_attestation(
@@ -799,33 +778,18 @@ def add_passkey(username: str, password: str, passkey_name: str) -> Passkey:
         # Send public key credential attestation to relying party (ubank).
         try:
             client.post(
-                url=f"https://api.ubank.com.au/app/v1/v2/device/{passkey.device_id}/activate",
+                url=f"v2/device/{passkey.device_id}/activate",
                 json={
                     "attestation": json.dumps(attestation),
                     "origin": origin,
                     "type": "FIDO2",
                 },
+                # xsrf token from otp response
+                headers={"x-xsrf-token": otp_response_json["xsrfToken"]},
             ).raise_for_status()
         except httpx.HTTPStatusError as e:
             e.add_note(e.response.text)
             raise
-
-        # Set device ID header for future requests.
-        client.headers["x-device-id"] = passkey.device_id
-
-        # Clear this session's tokens.
-        client.request(
-            # Can't use client.delete() because bodies in DELETE requests have no
-            # defined semantics.
-            method="DELETE",
-            url="https://api.ubank.com.au/app/v1/sessions",
-            # Tokens were returned in /challenge/otp response.
-            json={
-                "accessToken": otp_response.json()["accessToken"],
-                "refreshToken": otp_response.json()["refreshToken"],
-                "sessionToken": otp_response.json()["sessionToken"],
-            },
-        )
 
         return passkey
 
