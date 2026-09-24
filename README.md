@@ -39,7 +39,7 @@ with open("passkey.txt", "rb") as f:
 with Client(passkey) as client:
     for account in client.get_linked_banks().linkedBanks[0].accounts:
         print(
-            f"{account.label} ({account.type}): {account.balance.available} {account.balance.currency}"
+            f"{account.label} ({account.type}): {account.balance.available:.2f} {account.balance.currency}"
         )
 ```
 
@@ -48,8 +48,8 @@ Run the script to print your account balances:
 ```console
 $ python balances.py
 Enter ubank password:
-Spend account (TRANSACTION): 765.48 AUD
-Savings account (SAVINGS): 1577.17 AUD
+Spend account (TRANSACTION): 4.20 AUD
+Savings account (SAVINGS): 0.69 AUD
 ```
 
 
@@ -92,7 +92,8 @@ You will be asked for your ubank password and secret code interactively. The pas
 
 ## ubank API client
 
-Create an instance of `ubank.Client` to access ubank's API:
+Create an instance of `ubank.Client` to access ubank's API with typed requests and
+responses:
 
 ```python
 from datetime import date
@@ -116,6 +117,22 @@ with Client(passkey) as client:
     client.get_cards()
     client.get_devices(deviceUuid=passkey.device_id)
     client.get_contacts()
+```
+
+Use `ubank.HttpClient` to make arbitrary requests not defined in `Client` methods.
+`Client.client` refers to its underlying `HttpClient` instance.
+
+If instantiated manually, `.authenticate(passkey)` must be called:
+
+```python
+from ubank import HttpClient
+
+with HttpClient() as http_client:
+    # call authenticate with passkey
+    http_client.authenticate(passkey)
+    response = http_client.get("/api/transactions/transactions", params=dict(limit=5))
+    print(response)
+    print(response.json())
 ```
 
 
