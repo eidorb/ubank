@@ -34,6 +34,7 @@ from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from fido2 import cbor
 from meatie import api_ref, endpoint
 from pydantic import BaseModel, ConfigDict, Field
+from wre_client_akamai import AkamaiClient, RequestInput
 
 from soft_webauthn_patched import SoftWebauthnDevice
 
@@ -411,6 +412,67 @@ class Client(meatie_httpx.Client):
     @endpoint("contacts")
     def get_contacts(self) -> Contacts:
         """Returns details of payment contacts."""
+
+
+class AkamaiTransport(httpx.BaseTransport):
+    """httpx transport using AkamaiClient to handle requests.
+
+    `header_blacklist` names headers controlled by AkamaiClient. We don't want httpx
+    to interfere with these.
+    """
+
+    def __init__(
+        self,
+        akamai_client: AkamaiClient,
+        *,
+        telemetry: bool = True,
+        header_blacklist: set[str] = {
+            "user-agent",
+            "accept",
+            "accept-language",
+            "accept-encoding",
+            "origin",
+            "referer",
+            "cookie",
+            "host",
+            "connection",
+            "content-length",
+            "transfer-encoding",
+            "akamai-bm-telemetry",
+        },
+    ):
+        self.akamai_client = akamai_client
+        self.telemetry = telemetry
+        self.header_blacklist = header_blacklist
+
+    def handle_request(self, request: httpx.Request) -> httpx.Response:
+        request.read()  # full body - wre doesn't stream
+        answered = self.akamai_client.request(
+            RequestInput(
+                url=str(request.url),  # this includes query params
+                method=request.method,
+                # drop incoming headers that are blacklisted
+                headers={
+                    k: v
+                    for k, v in request.headers.items()
+                    if k.lower() not in self.header_blacklist
+                },
+                # httpx already encodes incoming json body in request.content
+                # don't need to double handle encoding
+                body=request.content.decode("utf-8") if request.content else None,
+                telemetry=self.telemetry,
+            )
+        )
+        return httpx.Response(
+            status_code=answered["status"],
+            headers=answered.get("headers") or [],
+            content=(answered.get("body") or "").encode("utf-8"),
+            request=request,
+        )
+
+    def close(self):
+        # client closed when transport closed
+        self.akamai_client.close()
 
 
 class HttpClient(httpx.Client):
