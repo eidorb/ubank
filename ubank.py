@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import re
 import time
 import uuid
 from base64 import b64encode, urlsafe_b64encode
@@ -814,32 +815,38 @@ def from_dict(device_dict: dict) -> SoftWebauthnDevice:
     return device
 
 
-def generate_device_meta(device_name="iPhone17-3") -> str:
-    """Returns x-device-meta header value with dynamic app versions.
+def generate_device_meta(user_agent: str, app_version: str = "2.242.1") -> str:
+    """Returns x-device-meta string from user agent and app version.
 
-    Calls ubank API to determine minimum required version. The value is cached so
-    that the lookup only happens once for the life of the program.
+    Supply `user_agent` from call to `.info()["user_agent"]` on an instance of
+    AkamaiClient. (Assumes MacOS Chrome user agent.)
 
-    Set device_name to latest iPhone model in case API blocks old models.
-    Matches format of "Hardware strings" row in this table, replacing ',' with '-':
-    https://en.wikipedia.org/wiki/List_of_iPhone_models
+    See https://www.ubank.com.au/welcome/login/username for latest app version.
     """
-    # The health endpoint tells us the minimum required version. See version history
-    # on the app store: https://apps.apple.com/au/app/id1449543099.
-    if not hasattr(generate_device_meta, "min_version"):
-        generate_device_meta.min_version = httpx.get(
-            "https://api.ubank.com.au/app/v1/health"
-        ).json()["minBinaryVersion"]  # see forceMinBinaryVersion too
+    assert "Chrome/" in user_agent
+    browser_name = "Chrome"
+    match = re.search(r"Chrome/([\d.]+)", user_agent)
+    assert match
+    browser_version = match.group(1)
+    # truncate version to 3 components
+    browser_version = ".".join(browser_version.split(".")[:3])
+    assert "Macintosh" in user_agent
+    browser_os = "Mac OS"
     return json.dumps(
         {
-            "appVersion": generate_device_meta.min_version,
-            "binaryVersion": generate_device_meta.min_version,
-            "deviceName": device_name,
+            "appVersion": app_version,
+            "browserInfo": {
+                "browserName": browser_name,
+                "browserOs": browser_os,
+                "browserType": "browser",
+                "browserVersion": browser_version,
+            },
+            "deviceName": user_agent,
             "environment": "production",
             "instance": "live",
-            "native": True,
-            "platform": "ios",
-        }
+            "platform": "IB",
+        },
+        separators=(",", ":"),
     )
 
 
