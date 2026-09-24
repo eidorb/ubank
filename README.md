@@ -214,6 +214,12 @@ If you screw up -- delete local and remote tags and have another go:
 
 ## Changelog
 
+### 3.0.0
+
+- Rewrite using `wre-client-akamai`
+- Use browser api paths, not mobile
+
+
 ##### 2.2.5
 
 - Update dependencies to support Python 3.14
