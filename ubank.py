@@ -117,7 +117,17 @@ class Passkey:
 class Client(meatie_httpx.Client):
     """A ubank Meatie client.
 
-    Provides methods for interacting with the following resources:
+    Requests are authenticated with the given passkey.
+
+    Use as a context manager to ensure underlying clients are closed:
+
+        with Client(passkey) as client:
+            ...
+
+    If required, you can override `api_version` and `app_version` to change the
+    values sent in requests.
+
+    Methods are defined interacting with the following ubank resources:
 
     - customer details
     - accounts
@@ -125,6 +135,9 @@ class Client(meatie_httpx.Client):
     - cards
     - contacts
     - authentication devices (includes passkeys)
+
+    API endpoints as implemented as they are, as ugly or weird as they may be. You
+    can extend with your own helper methods.
 
     This Meatie client has a bunch of methods defined... with nothing in them!
 
@@ -135,8 +148,10 @@ class Client(meatie_httpx.Client):
     I've heard of decorators, but not descriptors. Sounds powerful. Worth looking into.
     """
 
-    def __init__(self, passkey: Passkey) -> None:
-        super().__init__(HttpClient(passkey))
+    def __init__(
+        self, passkey: Passkey, api_version="37", app_version="2.242.1"
+    ) -> None:
+        super().__init__(HttpClient(passkey, api_version, app_version))
 
     @endpoint("/app/v1/customer-details")
     def get_customer_details(self) -> Customer:
