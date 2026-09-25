@@ -345,11 +345,11 @@ class Client(meatie_httpx.Client):
     def __init__(self, passkey: Passkey) -> None:
         super().__init__(HttpClient(passkey))
 
-    @endpoint("customer-details")
+    @endpoint("/app/v1/customer-details")
     def get_customer_details(self) -> Customer:
         """Returns customer details."""
 
-    @endpoint("accounts")
+    @endpoint("/app/v1/accounts")
     def get_linked_banks(
         self, externalRefresh: str = "false", refresh: str = "false", type: str = "all"
     ) -> LinkedBanks:
@@ -359,7 +359,7 @@ class Client(meatie_httpx.Client):
         - `type` sets type of accounts returned: 'internal', 'external', or 'all'.
         """
 
-    @endpoint("accounts/{account_id}/bank/{bank_id}/transactions")
+    @endpoint("/app/v1/accounts/{account_id}/bank/{bank_id}/transactions")
     def search_account_transactions(
         self,
         account_id: str,
@@ -375,7 +375,7 @@ class Client(meatie_httpx.Client):
         SearchResults.nextPageId from previous response in subsequent requests.
         """
 
-    @endpoint("accounts/transactions/search", method="POST")
+    @endpoint("/app/v1/accounts/transactions/search", method="POST")
     def summarise_transactions(
         self,
         # Exclude any Filter fields set to None before sending.
@@ -389,19 +389,19 @@ class Client(meatie_httpx.Client):
         of TransactionSummary.nextPageId from previous response in subsequent requests.
         """
 
-    @endpoint("cards")
+    @endpoint("/app/v1/cards")
     def get_cards(self) -> Cards:
         """Returns details of payment cards."""
 
-    @endpoint("v2/devices")
+    @endpoint("/app/v1/v2/devices")
     def get_devices(self, deviceUuid: str) -> list[Device]:
         """Returns enrolled authentication devices."""
 
-    @endpoint("device/{device_id}")
+    @endpoint("/app/v1/device/{device_id}")
     def delete_device(self, device_id: str) -> str:
         """Removes (invalidates) authentication device."""
 
-    @endpoint("contacts")
+    @endpoint("/app/v1/contacts")
     def get_contacts(self) -> Contacts:
         """Returns details of payment contacts."""
 
@@ -486,10 +486,10 @@ class HttpClient(httpx.Client):
         with HttpClient(passkey) as client:
             ...
 
-    `base_url` is set to https://www.ubank.com.au/app/v1/. Use relative paths in requests:
+    `base_url` is set to https://www.ubank.com.au. Use relative paths in requests:
 
     ```python
-    client.get("accounts/summary")
+    client.get("/app/v1/accounts/summary")
     ```
     """
 
@@ -510,7 +510,7 @@ class HttpClient(httpx.Client):
             },
             # requests get a x-request-id
             event_hooks={"request": [add_request_id]},
-            base_url="https://www.ubank.com.au/app/v1/",
+            base_url="https://www.ubank.com.au",
             transport=AkamaiTransport(self.akamai_client),
         )
         if passkey is not None:
@@ -536,11 +536,24 @@ class HttpClient(httpx.Client):
         # https://www.w3.org/TR/webauthn-2/#signature-counter
         passkey.soft_webauthn_device.sign_count = int(time.time())
 
-        # Initiate authentication flow to receive challenge from relying party
-        # (ubank).
+        # Initiate auth flow by identifying ourselves. Here, identity is a uuid
+        # rather than email/mobile username.
+        try:
+            response = self.post(
+                "/app/v1/welcome", json={"identity": passkey.username}
+            ).raise_for_status()
+        except httpx.HTTPStatusError as e:
+            e.add_note(e.response.text)
+            raise
+        response_json = response.json()
+
+        # update headers with xsrf token from this response
+        assert response_json["xsrfToken"]
+        self.headers["x-xsrf-token"] = response_json["xsrfToken"]
+        # Receive challenge from relying party (ubank).
         try:
             response = self.get(
-                "session/authorize",
+                "/app/v1/session/authorize",
                 params={"username": passkey.username},
             ).raise_for_status()
         except httpx.HTTPStatusError as e:
@@ -550,7 +563,7 @@ class HttpClient(httpx.Client):
 
         # Parse credential request options from response.
         options = parse_public_key_credential_request_options(
-            response.json()["publicKeyCredentialRequestOptions"]
+            response_json["publicKeyCredentialRequestOptions"]
         )
         # Make assertion object suitable for ubank by making values JSON-serializable.
         assertion = prepare_assertion(passkey.soft_webauthn_device.get(options, origin))
@@ -558,7 +571,7 @@ class HttpClient(httpx.Client):
         # party.
         try:
             response = self.post(
-                "challenge/fido2-assertion",
+                "/app/v1/challenge/fido2-assertion",
                 # Query parameters come from previous response.
                 params={
                     "nonce": response_json["nonce"],
@@ -571,23 +584,17 @@ class HttpClient(httpx.Client):
                     "flowId": response_json["flowId"],
                     "origin": origin,
                 },
-                # Set access and auth token headers from previous response.
-                headers={
-                    "x-access-token": response_json["accessToken"],
-                    "x-auth-token": response_json["accessToken"],
-                },
             ).raise_for_status()
         except httpx.HTTPStatusError as e:
             e.add_note(e.response.text)
             raise
         response_json = response.json()
-        # Set access and auth token headers for future requests.
-        self.access_token = self.headers["x-access-token"] = self.headers[
-            "x-auth-token"
-        ] = response_json["accessToken"]
-        # Store other tokens in order to kill session in future.
-        self.refresh_token = response_json["refreshToken"]
-        self.session_token = response_json["sessionToken"]
+
+        # update headers once again with xsrf token from this response
+        assert response_json["xsrfToken"]
+        self.headers["x-xsrf-token"] = response_json["xsrfToken"]
+        # useful for other paths not under /app/v1/
+        self.headers["Authorization"] = f"Bearer {response_json['xsrfToken']}"
 
 
 def derive_key(password: str, salt=b"") -> bytes:
@@ -702,7 +709,7 @@ def add_passkey(username: str, password: str, passkey_name: str) -> Passkey:
         # Start enrolment by identifying ourselves.
         try:
             response = client.post(
-                url="welcome",
+                url="/app/v1/welcome",
                 json={"identity": username},
             ).raise_for_status()
         except httpx.HTTPStatusError as e:
@@ -713,7 +720,7 @@ def add_passkey(username: str, password: str, passkey_name: str) -> Passkey:
         # Next, authenticate with password.
         try:
             response = client.post(
-                url="challenge/password",
+                url="/app/v1/challenge/password",
                 json={"deviceName": passkey_name, "password": password},
                 # xsrf token from previous response
                 headers={"x-xsrf-token": response_json["xsrfToken"]},
@@ -726,7 +733,7 @@ def add_passkey(username: str, password: str, passkey_name: str) -> Passkey:
         # Authenticate with second factor: a security code sent to mobile.
         try:
             otp_response = client.post(
-                url="challenge/otp",
+                url="/app/v1/challenge/otp",
                 # Set parameters returned in previous response.
                 params={
                     "nonce": response_json["nonce"],
@@ -754,7 +761,7 @@ def add_passkey(username: str, password: str, passkey_name: str) -> Passkey:
         # Initiate registration of new credential (passkey) with relying party (ubank).
         try:
             response = client.post(
-                url="v2/device",
+                url="/app/v1/v2/device",
                 json={"deviceName": passkey_name, "type": "FIDO2"},
                 # xsrf token from previous response
                 headers={"x-xsrf-token": otp_response_json["xsrfToken"]},
@@ -778,7 +785,7 @@ def add_passkey(username: str, password: str, passkey_name: str) -> Passkey:
         # Send public key credential attestation to relying party (ubank).
         try:
             client.post(
-                url=f"v2/device/{passkey.device_id}/activate",
+                url=f"/app/v1/v2/device/{passkey.device_id}/activate",
                 json={
                     "attestation": json.dumps(attestation),
                     "origin": origin,
