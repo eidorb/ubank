@@ -82,6 +82,12 @@ class Value(BaseModel):
     currency: str
 
 
+# such a retarded api...
+class TransactionBalance(BaseModel):
+    amount: Decimal
+    currency: Optional[str] = None
+
+
 class From(BaseModel):
     name: Optional[str] = None
     legalName: Optional[str] = None
@@ -105,7 +111,7 @@ class Transaction(BaseModel):
     type: Optional[str] = None
     shortDescription: Optional[str] = None
     narration: Optional[Value] = None
-    balance: Optional[Value] = None
+    balance: Optional[TransactionBalance] = None
     debitOrCredit: Optional[str] = None
     description: Optional[str] = None
     category: Optional[str] = None
