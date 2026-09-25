@@ -223,7 +223,6 @@ class AkamaiTransport(httpx.BaseTransport):
 
     def __init__(
         self,
-        akamai_client: AkamaiClient,
         *,
         telemetry: bool = True,
         header_blacklist: set[str] = {
@@ -241,11 +240,19 @@ class AkamaiTransport(httpx.BaseTransport):
             "akamai-bm-telemetry",
         },
     ):
-        self.akamai_client = akamai_client
         self.telemetry = telemetry
         self.header_blacklist = header_blacklist
 
+        self.akamai_client = AkamaiClient.open(
+            AkamaiConfig(page_url="https://www.ubank.com.au/welcome/login/username")
+        )
+        self.is_solved = False
+
     def handle_request(self, request: httpx.Request) -> httpx.Response:
+        # lazily solve on first request
+        if not self.is_solved:
+            self.akamai_client.solve({})  # solve some puzzles
+            self.is_solved = True
         request.read()  # full body - wre doesn't stream
         answered = self.akamai_client.request(
             RequestInput(
@@ -283,46 +290,39 @@ def add_request_id(request: httpx.Request) -> None:
 class HttpClient(httpx.Client):
     """httpx client customised to authenticate with ubank.
 
-    Requests are authenticated with a passkey, if supplied. Authenticate manually
-    with `.authenticate(passkey)`.
+    When used as a context manager, the client will authenticate with the passkey
+    (if supplied):
+        with HttpClient(passkey) as http_client:
+            ...
 
     Set `api_version` to customise `x-api-version` header value.
     Set `app_version` to customise app version in `x-device-meta` header value.
 
-    Use as a context manager so the Akamai transport client is closed:
-
-        with HttpClient(passkey) as client:
-            ...
-
     `base_url` is set to https://www.ubank.com.au. Use relative paths in requests:
 
     ```python
-    client.get("/app/v1/accounts/summary")
+    http_client.get("/app/v1/accounts/summary")
     ```
     """
 
     def __init__(
         self, passkey: Optional[Passkey] = None, api_version="37", app_version="2.242.1"
     ) -> None:
-        self.akamai_client = AkamaiClient.open(
-            AkamaiConfig(page_url="https://www.ubank.com.au/welcome/login/username")
-        )
-        self.akamai_client.solve({})  # solve some puzzles
+        transport = transport = AkamaiTransport()
         super().__init__(
             # standard headers for every request
             headers={
                 "x-api-version": api_version,
                 "x-device-meta": generate_device_meta(
-                    self.akamai_client.info()["user_agent"], app_version
+                    transport.akamai_client.info()["user_agent"], app_version
                 ),
             },
             # requests get a x-request-id
             event_hooks={"request": [add_request_id]},
             base_url="https://www.ubank.com.au",
-            transport=AkamaiTransport(self.akamai_client),
+            transport=transport,
         )
-        if passkey is not None:
-            self.authenticate(passkey)
+        self.passkey = passkey
 
     def authenticate(self, passkey: Passkey) -> None:
         """Authenticates session with supplied passkey.
@@ -403,6 +403,12 @@ class HttpClient(httpx.Client):
         self.headers["x-xsrf-token"] = response_json["xsrfToken"]
         # useful for other paths not under /app/v1/
         self.headers["Authorization"] = f"Bearer {response_json['xsrfToken']}"
+
+    def __enter__(self):
+        super().__enter__()
+        if self.passkey is not None:
+            self.authenticate(self.passkey)
+        return self
 
 
 def derive_key(password: str, salt=b"") -> bytes:
