@@ -190,7 +190,8 @@ class Client(meatie_httpx.Client):
         self,
         # Exclude any Filter fields set to None before sending.
         body: Annotated[
-            Filter, api_ref(fmt=lambda body: body.model_dump(exclude_none=True))
+            # model_dump_json to serialize date fields
+            Filter, api_ref(fmt=lambda body: body.model_dump_json(exclude_none=True))
         ],
     ) -> TransactionsSummary:
         """Returns filtered transactions from all accounts.
