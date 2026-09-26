@@ -218,6 +218,7 @@ If you screw up -- delete local and remote tags and have another go:
 
 - Rewrite using `wre-client-akamai`
 - Use browser api paths, not mobile
+- Upgrade dependencies
 
 
 ##### 2.2.5

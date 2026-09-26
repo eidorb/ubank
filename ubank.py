@@ -45,7 +45,7 @@ from models import (
 )
 from soft_webauthn_patched import SoftWebauthnDevice
 
-__version__ = "3.0.0a0"
+__version__ = "3.0.0a1"
 
 # Referenced in Client and add_passkey() for attestation and assertion.
 origin = "www.ubank.com.au"
