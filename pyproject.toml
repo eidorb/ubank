@@ -28,11 +28,22 @@ build-backend = "hatchling.build"
 path = "ubank.py"
 
 [tool.hatch.build.targets.sdist]
-exclude = ["notebook.gif"]
+only-include = [
+    ".github/workflows/",
+    "tests/",
+    "LICENSE",
+    "README.md",
+    "models.py",
+    "pyproject.toml",
+    "soft_webauthn_patched.py",
+    "ubank.py",
+    "uv.lock",
+]
 # https://docs.astral.sh/uv/concepts/build-backend/#file-inclusion-and-exclusion
 [tool.hatch.build.targets.wheel]
-include = [
+only-include = [
     "ubank.py",
+    "models.py",
     "soft_webauthn_patched.py",
 ]
 
