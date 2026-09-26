@@ -151,7 +151,9 @@ class Client(meatie_httpx.Client):
     def __init__(
         self, passkey: Passkey, api_version="37", app_version="2.242.1"
     ) -> None:
-        super().__init__(HttpClient(passkey, api_version, app_version))
+        http_client = HttpClient(api_version, app_version)
+        http_client.authenticate(passkey)
+        super().__init__(http_client)
 
     @endpoint("/app/v1/customer-details")
     def get_customer_details(self) -> Customer:
@@ -288,11 +290,12 @@ def add_request_id(request: httpx.Request) -> None:
 
 
 class HttpClient(httpx.Client):
-    """httpx client customised to authenticate with ubank.
+    """ubank HTTP client.
 
-    When used as a context manager, the client will authenticate with the passkey
-    (if supplied):
-        with HttpClient(passkey) as http_client:
+    Must call `.authenticate(passkey)` before making authenticated requests.
+
+        with HttpClient() as http_client:
+            http_client.authenticate(passkey)
             ...
 
     Set `api_version` to customise `x-api-version` header value.
@@ -305,9 +308,7 @@ class HttpClient(httpx.Client):
     ```
     """
 
-    def __init__(
-        self, passkey: Optional[Passkey] = None, api_version="37", app_version="2.242.1"
-    ) -> None:
+    def __init__(self, api_version="37", app_version="2.242.1") -> None:
         transport = transport = AkamaiTransport()
         super().__init__(
             # standard headers for every request
@@ -322,7 +323,6 @@ class HttpClient(httpx.Client):
             base_url="https://www.ubank.com.au",
             transport=transport,
         )
-        self.passkey = passkey
 
     def authenticate(self, passkey: Passkey) -> None:
         """Authenticates session with supplied passkey.
@@ -403,12 +403,6 @@ class HttpClient(httpx.Client):
         self.headers["x-xsrf-token"] = response_json["xsrfToken"]
         # useful for other paths not under /app/v1/
         self.headers["Authorization"] = f"Bearer {response_json['xsrfToken']}"
-
-    def __enter__(self):
-        super().__enter__()
-        if self.passkey is not None:
-            self.authenticate(self.passkey)
-        return self
 
 
 def derive_key(password: str, salt=b"") -> bytes:
